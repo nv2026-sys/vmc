@@ -108,6 +108,12 @@ class DemoDispatchSeeder extends Seeder
                     'stations' => [$central],
                 ],
                 [
+                    'name' => 'Demo North Vehicle Driver',
+                    'email' => 'north.vehicle.driver@example.test',
+                    'role' => 'VEHICLE_DRIVER',
+                    'stations' => [$north],
+                ],
+                [
                     'name' => 'Demo Response Team Member',
                     'email' => 'team.member@example.test',
                     'role' => 'TEAM_MEMBER',
@@ -149,7 +155,7 @@ class DemoDispatchSeeder extends Seeder
             $this->seedOperations($central, $north);
         });
 
-        $this->command?->info('Demo stations, wards, users, vehicles, teams, and emergency jobs are ready.');
+        $this->command?->info('Demo stations, wards, users, vehicles, teams, and two days of emergency jobs are ready.');
         $this->command?->line('Demo accounts have generated private passwords; reset them from User management before signing in.');
         $this->command?->line('Demo account emails use the example.test domain.');
     }
@@ -230,6 +236,8 @@ class DemoDispatchSeeder extends Seeder
         $activeOccurredAt = $now->copy()->subMinutes(14);
         $pendingOccurredAt = $now->copy()->subMinutes(4);
         $transferredOccurredAt = $now->copy()->subHours(2);
+        $yesterdayOccurredAt = $now->copy()->subDay();
+        $twoDaysAgoOccurredAt = $now->copy()->subDays(2);
         $assignmentAt = $activeOccurredAt->copy()->addMinutes(5);
         $enRouteAt = $activeOccurredAt->copy()->addMinutes(7);
         $gpsAt = $now->copy()->subMinutes(2);
@@ -293,11 +301,53 @@ class DemoDispatchSeeder extends Seeder
             ],
         );
         $transferredJob->restore();
+        $yesterdayJob = EmergencyJob::withTrashed()->updateOrCreate(
+            ['job_id' => 'VMC-DEMO-0004'],
+            [
+                'caller_name' => 'Demo Caller Four',
+                'caller_phone' => '+91-90000-00004',
+                'call_source' => 'PHONE',
+                'incident_type' => 'ROAD_ACCIDENT',
+                'priority' => 'NORMAL',
+                'occurred_at' => $yesterdayOccurredAt,
+                'ward_id' => $riverWard->id,
+                'society_name' => 'Riverside Demo Housing',
+                'incident_address' => '6 Riverside Avenue, River Ward, Vadodara',
+                'latitude' => 22.3341000,
+                'longitude' => 73.1982000,
+                'remarks' => 'DEMO DRILL: Sample incident from yesterday for dashboard testing.',
+                'status' => EmergencyJob::STATUS_RECEIVED,
+                'created_by' => $northDispatcher->id,
+            ],
+        );
+        $yesterdayJob->restore();
+        $twoDaysAgoJob = EmergencyJob::withTrashed()->updateOrCreate(
+            ['job_id' => 'VMC-DEMO-0005'],
+            [
+                'caller_name' => 'Demo Caller Five',
+                'caller_phone' => '+91-90000-00005',
+                'call_source' => 'PHONE',
+                'incident_type' => 'STRUCTURE_FIRE',
+                'priority' => 'HIGH',
+                'occurred_at' => $twoDaysAgoOccurredAt,
+                'ward_id' => $marketWard->id,
+                'society_name' => 'Market Demo Complex',
+                'incident_address' => '18 Market Road, Market Ward, Vadodara',
+                'latitude' => 22.3031000,
+                'longitude' => 73.1872000,
+                'remarks' => 'DEMO DRILL: Sample incident from two days ago for dashboard testing.',
+                'status' => EmergencyJob::STATUS_RECEIVED,
+                'created_by' => $centralDispatcher->id,
+            ],
+        );
+        $twoDaysAgoJob->restore();
 
         foreach ([
             [$activeJob, 'DEMO-CALL-0001', 'Caller reports a residential fire.'],
             [$pendingJob, 'DEMO-CALL-0002', 'Caller reports a road accident.'],
             [$transferredJob, 'DEMO-CALL-0003', 'Caller requests medical assistance.'],
+            [$yesterdayJob, 'DEMO-CALL-0004', 'Demo incident from yesterday for dashboard testing.'],
+            [$twoDaysAgoJob, 'DEMO-CALL-0005', 'Demo incident from two days ago for dashboard testing.'],
         ] as [$job, $callReference, $notes]) {
             JobCallLog::query()->updateOrCreate(
                 ['call_reference' => $callReference],
@@ -319,6 +369,7 @@ class DemoDispatchSeeder extends Seeder
                 'fire_station_id' => $central->id,
                 'team_id' => $centralTeam->id,
                 'team_leader_user_id' => $centralDriver->id,
+                'assigned_driver_user_id' => $centralDriver->id,
                 'assigned_by' => $centralDispatcher->id,
                 'assigned_at' => $assignmentAt,
                 'released_at' => null,
@@ -335,6 +386,8 @@ class DemoDispatchSeeder extends Seeder
             [$pendingJob, null, null, EmergencyJob::STATUS_RECEIVED, $pendingOccurredAt, 'DEMO DRILL: Call received; awaiting dispatch.'],
             [$transferredJob, null, null, EmergencyJob::STATUS_RECEIVED, $transferredOccurredAt, 'DEMO DRILL: Call received.'],
             [$transferredJob, null, EmergencyJob::STATUS_RECEIVED, EmergencyJob::STATUS_TRANSFERRED_TO_112, $transferredOccurredAt->copy()->addMinutes(7), 'DEMO DRILL: Transferred to external emergency service.'],
+            [$yesterdayJob, null, null, EmergencyJob::STATUS_RECEIVED, $yesterdayOccurredAt, 'DEMO DRILL: Previous-day sample call received.'],
+            [$twoDaysAgoJob, null, null, EmergencyJob::STATUS_RECEIVED, $twoDaysAgoOccurredAt, 'DEMO DRILL: Two-day-old sample call received.'],
         ] as [$job, $eventAssignment, $previous, $next, $changedAt, $remarks]) {
             JobStatusHistory::query()->updateOrCreate(
                 [

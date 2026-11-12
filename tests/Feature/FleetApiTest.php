@@ -36,6 +36,7 @@ class FleetApiTest extends TestCase
                 'assignments' => [[
                     'fire_station_id' => $station->id,
                     'vehicle_id' => $vehicle->id,
+                    'driver_user_id' => $driver->id,
                     'team_id' => $team->id,
                 ]],
             ])
@@ -48,13 +49,19 @@ class FleetApiTest extends TestCase
         ]);
 
         $this->actingAs($driver, 'sanctum');
+        $this->getJson('/api/v1/fleet/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.0.job.job_id', 'FLEET-ASSIGNMENT-01')
+            ->assertJsonPath('data.0.navigation.destination.address', '12 Fleet Road');
+
         $this->getJson('/api/v1/fleet/assignments')
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $assignment->id)
             ->assertJsonPath('data.0.job.job_id', 'FLEET-ASSIGNMENT-01')
             ->assertJsonPath('data.0.job.society_name', 'Central Society')
-            ->assertJsonPath('data.0.vehicle.vehicle_number', 'FLEET-FIRE-01');
+            ->assertJsonPath('data.0.vehicle.vehicle_number', 'FLEET-FIRE-01')
+            ->assertJsonPath('data.0.driver.id', $driver->id);
 
         $this->getJson('/api/v1/fleet/vehicles')
             ->assertOk()
@@ -88,8 +95,10 @@ class FleetApiTest extends TestCase
             'emergency_job_id' => $job->id,
             'fire_station_id' => $station->id,
             'vehicle_id' => $vehicle->id,
+            'driver_user_id' => $driver->id,
             'team_id' => $team->id,
             'team_leader_user_id' => $driver->id,
+            'assigned_driver_user_id' => $driver->id,
             'assigned_at' => now(),
             'status' => JobAssignment::STATUS_ASSIGNED,
         ]);
@@ -110,6 +119,80 @@ class FleetApiTest extends TestCase
         $this->actingAs($operator, 'sanctum')
             ->getJson('/api/v1/fleet/vehicles')
             ->assertForbidden();
+
+        $this->getJson('/api/v1/fleet/dashboard')->assertForbidden();
+    }
+
+    public function test_driver_can_view_and_update_only_assigned_jobs_without_station_membership(): void
+    {
+        [$dispatcher, $driver, $station, $ward, $vehicle, $team] = $this->fleetFixture();
+        $job = $this->job($dispatcher, $ward, 'FLEET-DRIVER-SCOPE-01');
+
+        $this->actingAs($dispatcher, 'sanctum')
+            ->postJson('/api/v1/jobs/'.$job->id.'/assignments', [
+                'assignments' => [[
+                    'fire_station_id' => $station->id,
+                    'vehicle_id' => $vehicle->id,
+                    'driver_user_id' => $driver->id,
+                    'team_id' => $team->id,
+                ]],
+            ])
+            ->assertOk();
+
+        $station->users()->detach($driver->id);
+        $assignment = JobAssignment::query()->firstOrFail();
+        $unassignedJob = $this->job($dispatcher, $ward, 'FLEET-DRIVER-UNASSIGNED-01');
+        $this->actingAs($driver, 'sanctum')
+            ->getJson('/api/v1/jobs')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.job_id', 'FLEET-DRIVER-SCOPE-01');
+
+        $this->getJson(route('dashboard.activity'))
+            ->assertOk()
+            ->assertJsonFragment(['job_id' => 'FLEET-DRIVER-SCOPE-01'])
+            ->assertDontSee($unassignedJob->job_id);
+
+        $this->patchJson("/api/v1/jobs/{$job->id}/assignments/{$assignment->id}/status", [
+            'status' => JobAssignment::STATUS_EN_ROUTE,
+        ])->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_EN_ROUTE);
+    }
+
+    public function test_legacy_driver_role_is_upgraded_so_driver_can_update_assignment_status(): void
+    {
+        [$dispatcher, $driver, $station, $ward, $vehicle, $team] = $this->fleetFixture();
+        $job = $this->job($dispatcher, $ward, 'FLEET-LEGACY-DRIVER-01');
+
+        $this->actingAs($dispatcher, 'sanctum')
+            ->postJson('/api/v1/jobs/'.$job->id.'/assignments', [
+                'assignments' => [[
+                    'fire_station_id' => $station->id,
+                    'vehicle_id' => $vehicle->id,
+                    'driver_user_id' => $driver->id,
+                    'team_id' => $team->id,
+                ]],
+            ])
+            ->assertOk();
+
+        $assignment = JobAssignment::query()->firstOrFail();
+        $legacyRole = Role::query()->create([
+            'code' => 'DRIVER',
+            'name' => 'Fire Vehicle Driver',
+            'is_system' => true,
+        ]);
+        $driver->roles()->sync([$legacyRole->id]);
+
+        $this->seed(RbacSeeder::class);
+        $this->assertTrue($driver->fresh()->hasRole('VEHICLE_DRIVER'));
+        $this->assertTrue($driver->fresh()->hasPermission('jobs.update_status'));
+
+        $this->actingAs($driver->fresh(), 'sanctum')
+            ->patchJson("/api/v1/jobs/{$job->id}/assignments/{$assignment->id}/status", [
+                'status' => JobAssignment::STATUS_EN_ROUTE,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_EN_ROUTE);
     }
 
     /**

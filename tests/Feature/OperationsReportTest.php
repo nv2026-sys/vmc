@@ -62,7 +62,7 @@ class OperationsReportTest extends TestCase
             'priority' => 'CRITICAL',
         ]);
 
-        $this->actingAs($admin, 'sanctum')
+        $response = $this->actingAs($admin, 'sanctum')
             ->getJson('/api/v1/reports/operations?'.http_build_query([
                 'from' => now()->subDay()->toDateString(),
                 'to' => now()->toDateString(),
@@ -77,7 +77,9 @@ class OperationsReportTest extends TestCase
             ->assertJsonPath('data.stations.0.deployments', 1)
             ->assertJsonPath('data.stations.0.completed_deployments', 1)
             ->assertJsonCount(1, 'data.stations_available')
-            ->assertJsonPath('data.daily.1.count', 2);
+            ->assertJsonCount(2, 'data.daily');
+
+        $this->assertSame(2, collect($response->json('data.daily'))->sum('count'));
     }
 
     public function test_reports_filter_by_station_and_reject_out_of_scope_stations_and_long_ranges(): void
@@ -135,8 +137,9 @@ class OperationsReportTest extends TestCase
         $this->actingAs($admin)
             ->get(route('app.reports'))
             ->assertOk()
-            ->assertSee('Daily incident volume')
-            ->assertSee('Station deployment workload')
+            ->assertSee('Incident Summary Report')
+            ->assertSee('Ward-wise Incident Report')
+            ->assertSee('Response Time Report')
             ->assertSee('Completed')
             ->assertSee('All accessible stations')
             ->assertSee('CSV')
@@ -146,6 +149,71 @@ class OperationsReportTest extends TestCase
         $member = User::factory()->create();
         $member->roles()->attach(Role::query()->where('code', 'TEAM_MEMBER')->value('id'));
         $this->actingAs($member)->get(route('app.reports'))->assertForbidden();
+    }
+
+    public function test_incident_report_table_applies_combined_filters_search_and_pagination(): void
+    {
+        [$admin, , $ward] = $this->stationAdmin();
+        $older = $this->job($ward, [
+            'job_id' => 'VMC-REPORT-FILTER-OLDER',
+            'caller_name' => 'Filtered Caller',
+            'incident_type' => 'ROAD_ACCIDENT',
+            'priority' => 'CRITICAL',
+            'occurred_at' => now()->subMinutes(20),
+            'status' => EmergencyJob::STATUS_RECEIVED,
+            'incident_address' => 'Main Road',
+        ]);
+        $newer = $this->job($ward, [
+            'job_id' => 'VMC-REPORT-FILTER-NEWER',
+            'caller_name' => 'Filtered Caller',
+            'incident_type' => 'ROAD_ACCIDENT',
+            'priority' => 'CRITICAL',
+            'occurred_at' => now()->subMinutes(10),
+            'status' => EmergencyJob::STATUS_RECEIVED,
+            'incident_address' => 'Main Road',
+        ]);
+        $this->job($ward, [
+            'job_id' => 'VMC-REPORT-FILTER-EXCLUDED',
+            'priority' => 'HIGH',
+            'status' => EmergencyJob::STATUS_RECEIVED,
+        ]);
+        $filters = [
+            'from' => now()->toDateString(),
+            'to' => now()->toDateString(),
+            'ward_id' => $ward->id,
+            'area' => 'Main',
+            'incident_type' => 'ROAD_ACCIDENT',
+            'priority' => 'CRITICAL',
+            'status' => EmergencyJob::STATUS_RECEIVED,
+            'caller' => 'Filtered Caller',
+            'draw' => 4,
+            'start' => 0,
+            'length' => 1,
+            'order_column' => 2,
+            'order_dir' => 'asc',
+        ];
+
+        $this->actingAs($admin)
+            ->getJson(route('app.reports.data', $filters))
+            ->assertOk()
+            ->assertJsonPath('draw', 4)
+            ->assertJsonPath('recordsTotal', 2)
+            ->assertJsonPath('recordsFiltered', 2)
+            ->assertJsonPath('data.0.job_id', $older->job_id)
+            ->assertJsonPath('data.0.number', 1);
+
+        $this->getJson(route('app.reports.data', $filters + [
+            'search' => 'VMC-REPORT-FILTER-NEWER',
+            'start' => 0,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('recordsFiltered', 1)
+            ->assertJsonPath('data.0.job_id', $newer->job_id);
+
+        $outsideStation = $this->station('FS-REPORT-FILTER-OUT', 'Outside Filter Station');
+        $this->getJson(route('app.reports.data', $filters + ['station_id' => $outsideStation->id]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('station_id');
     }
 
     private function stationAdmin(): array

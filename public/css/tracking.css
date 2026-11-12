@@ -139,6 +139,27 @@
     stroke-width: 3px;
 }
 
+.tracking-incident-halo {
+    fill: #ff334833;
+    stroke: #ff6579;
+    stroke-width: 2;
+}
+
+.tracking-incident-dot {
+    fill: #ff3348;
+    stroke: #fff3f4;
+    stroke-width: 2;
+}
+
+.tracking-incident-marker text {
+    fill: #fff;
+    font: 700 11px "Segoe UI", Arial, sans-serif;
+    paint-order: stroke;
+    stroke: #091a2e;
+    stroke-linejoin: round;
+    stroke-width: 3px;
+}
+
 .tracking-route-point {
     fill: #b9f4e3;
     stroke: #0c453c;
@@ -187,6 +208,10 @@
     height: 3px;
     border-radius: 2px;
     background: #5de0bb;
+}
+
+.tracking-map-legend .legend-incident {
+    background: #ff4658;
 }
 
 .tracking-unit-list {

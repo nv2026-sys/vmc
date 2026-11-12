@@ -12,7 +12,7 @@
         #07182e;
 }
 
-.operations-dashboard-layout .sidebar {
+.operations-dashboard-page .sidebar {
     z-index: 20;
     width: 252px;
     min-height: 100vh;
@@ -23,13 +23,13 @@
     background: linear-gradient(180deg, #0b2342, #091d37 75%, #081a32);
 }
 
-.operations-dashboard-layout .brand {
+.operations-dashboard-page .brand {
     gap: 11px;
     min-height: 48px;
     margin: 0 7px 20px;
 }
 
-.operations-dashboard-layout .brand-mark {
+.operations-dashboard-page .brand-mark {
     width: 42px;
     height: 42px;
     border: 1px solid #6394ca;
@@ -40,17 +40,17 @@
     font-size: 13px;
 }
 
-.operations-dashboard-layout .brand strong {
+.operations-dashboard-page .brand strong {
     font-size: 14px;
 }
 
-.operations-dashboard-layout .brand small {
+.operations-dashboard-page .brand small {
     margin-top: 4px;
     font-size: 9px;
     letter-spacing: 0.1em;
 }
 
-.operations-dashboard-layout .workspace {
+.operations-dashboard-page .workspace {
     min-height: 54px;
     margin: 0 0 20px;
     padding: 10px 11px;
@@ -59,7 +59,7 @@
     background: rgb(255 255 255 / 4%);
 }
 
-.operations-dashboard-layout .workspace-icon {
+.operations-dashboard-page .workspace-icon {
     width: 30px;
     height: 30px;
     border-radius: 9px;
@@ -68,26 +68,26 @@
     font-size: 15px;
 }
 
-.operations-dashboard-layout .workspace strong {
+.operations-dashboard-page .workspace strong {
     color: #eaf3ff;
     font-size: 11px;
 }
 
-.operations-dashboard-layout .workspace small {
+.operations-dashboard-page .workspace small {
     margin-top: 3px;
     color: #92a9c5;
     font-size: 9px;
 }
 
-.operations-dashboard-layout .navigation {
+.operations-dashboard-page .navigation {
     gap: 6px;
 }
 
-.operations-dashboard-layout .nav-group {
+.operations-dashboard-page .nav-group {
     margin-bottom: 14px;
 }
 
-.operations-dashboard-layout .nav-caption {
+.operations-dashboard-page .nav-caption {
     margin: 0 8px 7px;
     color: #7893b3;
     font-size: 9px;
@@ -96,7 +96,7 @@
     text-transform: uppercase;
 }
 
-.operations-dashboard-layout .nav-link {
+.operations-dashboard-page .nav-link {
     min-height: 38px;
     margin: 2px 0;
     padding: 0 10px;
@@ -107,30 +107,30 @@
     transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
-.operations-dashboard-layout .nav-link:hover {
+.operations-dashboard-page .nav-link:hover {
     border-color: rgb(132 174 224 / 17%);
     color: #f4f8ff;
     background: rgb(111 157 214 / 10%);
 }
 
-.operations-dashboard-layout .nav-link.active {
+.operations-dashboard-page .nav-link.active {
     border-color: rgb(87 165 255 / 28%);
     color: #fff;
     background: linear-gradient(100deg, rgb(38 114 196 / 30%), rgb(29 78 132 / 17%));
     box-shadow: inset 3px 0 #62b0ff;
 }
 
-.operations-dashboard-layout .nav-icon {
+.operations-dashboard-page .nav-icon {
     width: 20px;
     color: #8db4df;
     font-size: 14px;
 }
 
-.operations-dashboard-layout .nav-link.active .nav-icon {
+.operations-dashboard-page .nav-link.active .nav-icon {
     color: #9bceff;
 }
 
-.operations-dashboard-layout .sidebar-footer {
+.operations-dashboard-page .sidebar-footer {
     margin: 10px 2px 0;
     padding: 13px 8px 4px;
     border-top: 1px solid rgb(170 200 235 / 12%);
@@ -139,7 +139,7 @@
     letter-spacing: 0.06em;
 }
 
-.operations-dashboard-layout .main-column {
+.operations-dashboard-page .main-column {
     min-width: 0;
     min-height: 100vh;
     margin-left: 252px;
@@ -178,6 +178,41 @@
     margin-top: 4px;
     color: #9bb0ca;
     font-size: 11px;
+}
+
+.operations-dashboard-page .current-page-title {
+    min-width: 0;
+    margin-left: 8px;
+    padding-left: 18px;
+    overflow: hidden;
+    border-left: 1px solid rgb(167 196 230 / 20%);
+    color: #eff5fd;
+    font-size: 15px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.operations-dashboard-page .topbar-action {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-left: auto;
+    padding: 0 12px;
+    border: 1px solid #2788f3;
+    border-radius: 8px;
+    color: #fff;
+    background: linear-gradient(180deg, #1689f8, #0755bd);
+    box-shadow: 0 4px 14px rgb(0 100 220 / 25%);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.operations-dashboard-page .topbar-action:hover {
+    background: linear-gradient(180deg, #35a0ff, #0b68d5);
 }
 
 .operations-dashboard-layout .topbar-account {
@@ -226,9 +261,54 @@
     gap: 16px;
 }
 
+.operations-dashboard-layout .ops-dashboard-actions {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.operations-dashboard-layout .ops-dashboard-action {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 12px;
+    border: 1px solid #2a5585;
+    border-radius: 7px;
+    color: #d7eaff;
+    background: linear-gradient(180deg, #12355f, #0b2749);
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.operations-dashboard-layout .ops-dashboard-action:hover {
+    border-color: #48a9ff;
+    color: #fff;
+    background: linear-gradient(180deg, #174b81, #10345d);
+}
+
+.operations-dashboard-layout .ops-dashboard-action.is-primary {
+    border-color: #1689ff;
+    color: #fff;
+    background: linear-gradient(180deg, #168bff, #0756c3);
+    box-shadow: 0 0 10px rgb(23 137 255 / 22%), inset 0 1px rgb(255 255 255 / 20%);
+}
+
+.operations-dashboard-layout .ops-dashboard-action.is-primary:hover {
+    background: linear-gradient(180deg, #2698ff, #0868e4);
+    box-shadow: 0 0 13px rgb(23 137 255 / 32%), inset 0 1px rgb(255 255 255 / 24%);
+}
+
 .operations-dashboard-layout .ops-page-kicker {
     color: #83b9f1;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 750;
     letter-spacing: 0.13em;
 }
@@ -245,7 +325,7 @@
 .operations-dashboard-layout .ops-page-heading p {
     margin: 0;
     color: var(--ops-muted);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
 }
 
@@ -258,8 +338,91 @@
 
 .operations-dashboard-layout .ops-stat-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 12px;
+}
+
+.operations-dashboard-layout .ops-help-alerts {
+    border-color: rgb(255 104 94 / 45%);
+    background: linear-gradient(145deg, #321f2a, #17253d);
+}
+
+.operations-dashboard-layout .ops-help-alerts > .ops-panel-heading {
+    min-height: 48px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.operations-dashboard-layout .ops-help-alert-count {
+    color: #ffb5a6;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.operations-dashboard-layout .ops-help-alert-list {
+    display: grid;
+}
+
+.operations-dashboard-layout .ops-help-alert {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 14px;
+}
+
+.operations-dashboard-layout .ops-help-alert + .ops-help-alert {
+    border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.operations-dashboard-layout .ops-help-alert-icon {
+    display: grid;
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border: 1px solid #ef716c;
+    border-radius: 50%;
+    color: #fff;
+    background: #a6333e;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.operations-dashboard-layout .ops-help-alert-details {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 3px;
+}
+
+.operations-dashboard-layout .ops-help-alert-details strong {
+    color: #ffe6e1;
+    font-size: 12px;
+}
+
+.operations-dashboard-layout .ops-help-alert-details span,
+.operations-dashboard-layout .ops-help-alert-details small {
+    overflow-wrap: anywhere;
+    color: #c1ccdc;
+    font-size: 10px;
+}
+
+.operations-dashboard-layout .ops-help-alert-details small {
+    color: #e2bdbb;
+}
+
+.operations-dashboard-layout .ops-help-alert-meta {
+    display: grid;
+    flex: 0 0 auto;
+    justify-items: end;
+    gap: 4px;
+    color: #aebbd0;
+    font-size: 10px;
+}
+
+.operations-dashboard-layout .ops-help-alert-meta a {
+    color: #9dcaff;
 }
 
 .operations-dashboard-layout .ops-stat-card {
@@ -275,6 +438,32 @@
     border-radius: 13px;
     background: linear-gradient(145deg, #102b4d, #0c2341);
     box-shadow: 0 8px 22px rgb(0 10 24 / 14%);
+}
+
+.operations-dashboard-layout .ops-stat-blue {
+    border-color: rgb(68 151 255 / 54%);
+    background: linear-gradient(115deg, #1555a5, #0b2f68);
+    box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 8px 22px rgb(0 10 24 / 20%);
+}
+
+.operations-dashboard-layout .ops-stat-orange {
+    border-color: rgb(255 165 51 / 48%);
+    background: linear-gradient(115deg, #a95508, #4a2b13);
+}
+
+.operations-dashboard-layout .ops-stat-green {
+    border-color: rgb(54 218 151 / 48%);
+    background: linear-gradient(115deg, #08754b, #104634);
+}
+
+.operations-dashboard-layout .ops-stat-purple {
+    border-color: rgb(175 123 255 / 48%);
+    background: linear-gradient(115deg, #5735a7, #30225f);
+}
+
+.operations-dashboard-layout .ops-stat-cyan {
+    border-color: rgb(71 210 230 / 48%);
+    background: linear-gradient(115deg, #087d9a, #10465e);
 }
 
 .operations-dashboard-layout .ops-stat-card::after {
@@ -312,14 +501,14 @@
 
 .operations-dashboard-layout .ops-stat-card > div > span {
     color: #aabbd0;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 550;
     line-height: 1.3;
 }
 
 .operations-dashboard-layout .ops-stat-card strong {
     color: #f1f6fd;
-    font-size: 27px;
+    font-size: 30px;
     font-variant-numeric: tabular-nums;
     font-weight: 720;
     letter-spacing: -0.035em;
@@ -367,6 +556,879 @@
     box-shadow: 0 10px 28px rgb(0 10 24 / 16%);
 }
 
+.operations-dashboard-layout .ops-incidents-panel {
+    display: flex;
+    flex-direction: column;
+    border-color: rgb(55 130 224 / 42%);
+    box-shadow: 0 0 24px rgb(0 87 190 / 13%), 0 10px 28px rgb(0 10 24 / 16%);
+}
+
+.operations-dashboard-layout .ops-vehicles-panel {
+    border-color: rgb(55 130 224 / 34%);
+}
+
+.operations-dashboard-layout .ops-vehicles-panel .ops-panel-heading {
+    flex-wrap: wrap;
+}
+
+.operations-dashboard-layout .ops-vehicle-header-tools {
+    display: flex;
+    flex: 1 1 540px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.operations-dashboard-layout .ops-vehicle-tabs {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+}
+
+.operations-dashboard-layout .ops-vehicle-header-tools .ops-table-search {
+    flex: 0 1 190px;
+    min-width: 150px;
+}
+
+.operations-dashboard-layout .ops-vehicle-tab {
+    display: inline-flex;
+    min-height: 33px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border: 1px solid #2a5585;
+    border-radius: 6px;
+    color: #b7c9df;
+    background: linear-gradient(180deg, #12355f, #0b2749);
+    font-size: 10px;
+    font-weight: 650;
+    text-decoration: none;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-vehicle-tab.is-active {
+    border-color: #32a6ff;
+    color: #f0f7ff;
+    background: linear-gradient(180deg, #168bff, #0756c3);
+    box-shadow: 0 0 12px rgb(23 137 255 / 34%), inset 0 1px rgb(255 255 255 / 24%);
+}
+
+.operations-dashboard-layout .ops-vehicle-tab:hover {
+    border-color: #48a9ff;
+    color: #fff;
+    background: linear-gradient(180deg, #174b81, #10345d);
+}
+
+.operations-dashboard-layout .ops-vehicle-tab span {
+    color: #b9dcff;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+.operations-dashboard-layout .ops-table-search {
+    display: flex;
+    flex: 0 1 230px;
+    min-width: 180px;
+    min-height: 33px;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid #2b527c;
+    border-radius: 6px;
+    background: #081e38;
+}
+
+.operations-dashboard-layout .ops-table-search:focus-within {
+    border-color: #4a9cf0;
+    box-shadow: 0 0 0 2px rgb(51 144 239 / 18%);
+}
+
+.operations-dashboard-layout .ops-table-search input {
+    width: 100%;
+    min-width: 0;
+    min-height: 31px;
+    padding: 0 9px;
+    border: 0;
+    outline: 0;
+    color: #eaf2fc;
+    background: transparent;
+    font: inherit;
+    font-size: 10px;
+}
+
+.operations-dashboard-layout .ops-table-search input::placeholder {
+    color: #8098b4;
+}
+
+.operations-dashboard-layout .ops-table-search button {
+    flex: 0 0 34px;
+    align-self: stretch;
+    border: 0;
+    border-left: 1px solid #2b527c;
+    color: #bcdcff;
+    background: linear-gradient(180deg, #174879, #102f52);
+    cursor: pointer;
+    font-size: 17px;
+    transition: background 140ms ease, color 140ms ease;
+}
+
+.operations-dashboard-layout .ops-table-search button:hover {
+    color: #fff;
+    background: #175499;
+}
+
+.operations-dashboard-layout .ops-table-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 13px;
+    border-top: 1px solid rgb(164 195 232 / 12%);
+    color: #94abc7;
+    font-size: 10px;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav {
+    margin-left: auto;
+}
+
+.operations-dashboard-layout .ops-table-pagination .ops-vehicle-pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav > div:first-child {
+    display: none;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav > div:last-child {
+    display: flex;
+    align-items: center;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav > div:last-child > div:first-child {
+    display: none;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav > div:last-child > div:last-child,
+.operations-dashboard-layout .ops-table-pagination nav > div:last-child > div:last-child > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav a,
+.operations-dashboard-layout .ops-table-pagination nav span[aria-current="page"] > span,
+.operations-dashboard-layout .ops-table-pagination nav span:not([aria-current]) > span {
+    display: inline-flex;
+    min-width: 24px;
+    min-height: 24px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border: 1px solid #28517e;
+    border-radius: 5px;
+    color: #c1d5ed;
+    background: linear-gradient(180deg, #12365f, #0c294a);
+    font-size: 10px;
+    text-decoration: none;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav a:hover,
+.operations-dashboard-layout .ops-table-pagination nav span[aria-current="page"] > span {
+    border-color: #258fff;
+    color: #fff;
+    background: linear-gradient(180deg, #168bff, #0756c3);
+    box-shadow: 0 0 9px rgb(23 137 255 / 28%), inset 0 1px rgb(255 255 255 / 20%);
+}
+
+.operations-dashboard-layout .ops-table-pagination nav [aria-disabled="true"] > span {
+    color: #617b99;
+    background: #0a2039;
+    cursor: not-allowed;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav a:focus-visible {
+    outline: 2px solid #79baff;
+    outline-offset: 2px;
+}
+
+.operations-dashboard-layout .ops-table-pagination nav svg {
+    width: 13px;
+    height: 13px;
+}
+
+.operations-dashboard-layout .ops-vehicles-table {
+    min-width: 760px;
+}
+
+.operations-dashboard-layout .ops-vehicles-table th {
+    padding: 9px 10px;
+    border-bottom-color: #2860a2;
+    color: #e2eeff;
+    background: linear-gradient(180deg, #164f97, #123e78);
+    text-transform: uppercase;
+    letter-spacing: 0.045em;
+}
+
+.operations-dashboard-layout .ops-vehicles-table td {
+    padding: 8px 10px;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-vehicles-table td:first-child {
+    width: 36px;
+    color: #a9c5e7;
+    text-align: center;
+}
+
+.operations-dashboard-layout .ops-vehicles-table tbody tr:nth-child(even) td {
+    background: rgb(22 69 125 / 17%);
+}
+
+.operations-dashboard-layout .ops-vehicle-status {
+    display: inline-flex;
+    padding: 4px 8px;
+    border: 1px solid #d3923a;
+    border-radius: 999px;
+    color: #ffe0ad;
+    background: #593919;
+    font-size: 9px;
+    font-weight: 750;
+    text-transform: uppercase;
+}
+
+.operations-dashboard-layout .ops-vehicle-status.is-available {
+    border-color: #32bc87;
+    color: #b4f2d5;
+    background: #174b37;
+}
+
+.operations-dashboard-layout .ops-vehicle-status.is-deployed {
+    border-color: #348ee0;
+    color: #b8dcff;
+    background: #173d64;
+}
+
+.operations-dashboard-layout .ops-incidents-titlebar h2 {
+    font-size: 16px;
+}
+
+.operations-dashboard-layout .ops-incidents-titlebar {
+    align-items: center;
+    min-height: 66px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.operations-dashboard-layout .ops-incidents-title-main {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+}
+
+.operations-dashboard-layout .ops-incidents-title-main > div {
+    flex: 0 0 auto;
+}
+
+.operations-dashboard-layout .ops-incidents-title-main .ops-incident-search {
+    flex: 0 1 190px;
+    min-width: 150px;
+}
+
+.operations-dashboard-layout .ops-incidents-titlebar .ops-incident-filters {
+    flex: 1 1 auto;
+}
+
+.operations-dashboard-layout .ops-incidents-titlebar .ops-incident-filter {
+    min-height: 30px;
+}
+
+.operations-dashboard-layout .ops-incidents-view-all {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: #8fc2ff;
+    font-size: 11px;
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.operations-dashboard-layout .ops-incidents-view-all:hover {
+    color: #c0e0ff;
+}
+
+.operations-dashboard-layout .ops-incidents-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    min-height: 36px;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 3px 13px;
+    border-bottom: 1px solid rgb(164 195 232 / 13%);
+    background: rgb(5 22 42 / 36%);
+}
+
+.operations-dashboard-layout .ops-incidents-toolbar-tools {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.operations-dashboard-layout .ops-view-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid #24496e;
+    border-radius: 7px;
+    background: #081e38;
+}
+
+.operations-dashboard-layout .ops-view-toggle button {
+    min-height: 27px;
+    padding: 0 9px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: #a9bfd8;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-view-toggle button:hover {
+    color: #fff;
+    background: #15385e;
+}
+
+.operations-dashboard-layout .ops-view-toggle button.is-active {
+    border-color: #258fff;
+    color: #fff;
+    background: linear-gradient(180deg, #168bff, #0756c3);
+    box-shadow: 0 0 8px rgb(23 137 255 / 27%);
+}
+
+.operations-dashboard-layout .ops-incidents-map-view {
+    flex: 0 0 auto;
+    height: 330px;
+    padding: 10px;
+}
+
+.operations-dashboard-layout .ops-incidents-map-view[hidden] {
+    display: none !important;
+}
+
+.operations-dashboard-layout .ops-incidents-map {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgb(164 195 232 / 12%);
+    border-radius: 8px;
+    background:
+        radial-gradient(ellipse at 18% 25%, #64ad7040 0 11%, transparent 12%),
+        radial-gradient(ellipse at 83% 72%, #64ad7040 0 14%, transparent 15%),
+        radial-gradient(ellipse at 64% 18%, #64ad7030 0 8%, transparent 9%),
+        #091d37;
+}
+
+.operations-dashboard-layout .ops-incidents-map svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: #0c2442;
+}
+
+.operations-dashboard-layout .ops-incidents-map-road {
+    fill: none;
+    stroke: #315275;
+    stroke-width: 13;
+    opacity: .43;
+}
+
+.operations-dashboard-layout .ops-incidents-map-road.is-secondary {
+    stroke: #2b4969;
+    stroke-width: 9;
+    opacity: .34;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker-halo {
+    fill: #ff334833;
+    stroke: #ff657955;
+    stroke-width: 1;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker-dot {
+    fill: #ff4658;
+    stroke: #fff3f4;
+    stroke-width: 2;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-assigned .ops-dashboard-map-marker-halo,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-completed .ops-dashboard-map-marker-halo {
+    fill: #0cc66b38;
+    stroke: #20c77e99;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-assigned .ops-dashboard-map-marker-dot,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-completed .ops-dashboard-map-marker-dot {
+    fill: #0cc66b;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-en_route .ops-dashboard-map-marker-halo,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-received .ops-dashboard-map-marker-halo {
+    fill: #ffae1638;
+    stroke: #ffb52699;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-en_route .ops-dashboard-map-marker-dot,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-received .ops-dashboard-map-marker-dot,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-dispatched .ops-dashboard-map-marker-dot {
+    fill: #ffae16;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-dispatched .ops-dashboard-map-marker-halo {
+    fill: #ffae1638;
+    stroke: #ffb52699;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-in_progress .ops-dashboard-map-marker-halo {
+    fill: #168bff38;
+    stroke: #258fff99;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-in_progress .ops-dashboard-map-marker-dot {
+    fill: #168bff;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-closed .ops-dashboard-map-marker-halo,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-duplicate .ops-dashboard-map-marker-halo {
+    fill: #68788e38;
+    stroke: #9cabbf99;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-closed .ops-dashboard-map-marker-dot,
+.operations-dashboard-layout .ops-dashboard-map-marker.is-duplicate .ops-dashboard-map-marker-dot {
+    fill: #8797ac;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-transferred_to_112 .ops-dashboard-map-marker-halo {
+    fill: #8652e838;
+    stroke: #a276ff99;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker.is-transferred_to_112 .ops-dashboard-map-marker-dot {
+    fill: #8652e8;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker text {
+    fill: #e8f2ff;
+    font: 700 11px "Segoe UI", Arial, sans-serif;
+    paint-order: stroke;
+    stroke: #091a2e;
+    stroke-linejoin: round;
+    stroke-width: 3px;
+}
+
+.operations-dashboard-layout .ops-dashboard-map-marker:focus .ops-dashboard-map-marker-dot {
+    stroke: #fff;
+    stroke-width: 4;
+}
+
+.operations-dashboard-layout .ops-incidents-map-legend {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px 13px;
+    padding: 7px 9px;
+    border: 1px solid #ffffff20;
+    border-radius: 7px;
+    color: #c1d2e7;
+    background: #071a35dc;
+    font-size: 9px;
+}
+
+.operations-dashboard-layout .ops-incidents-map-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.operations-dashboard-layout .ops-incidents-map-legend i {
+    width: 8px;
+    height: 8px;
+    border: 1px solid #fff3f4;
+    border-radius: 50%;
+    background: #ff4658;
+}
+
+.operations-dashboard-layout .ops-incidents-map-empty {
+    display: grid;
+    min-height: 220px;
+    margin: 0;
+    place-items: center;
+    color: #91a8c3;
+    text-align: center;
+}
+
+.operations-dashboard-layout .ops-incident-filters {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+}
+
+.operations-dashboard-layout .ops-incident-filter {
+    display: inline-flex;
+    min-height: 33px;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    border: 1px solid #2a5585;
+    border-radius: 6px;
+    color: #b7c9df;
+    background: linear-gradient(180deg, #12355f, #0b2749);
+    font-size: 11px;
+    font-weight: 650;
+    text-decoration: none;
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-incident-filter.is-active {
+    border-color: #32a6ff;
+    color: #f0f7ff;
+    background: linear-gradient(180deg, #168bff, #0756c3);
+    box-shadow: 0 0 12px rgb(23 137 255 / 34%), inset 0 1px rgb(255 255 255 / 24%);
+}
+
+.operations-dashboard-layout .ops-incident-filter:hover {
+    border-color: #48a9ff;
+    color: #fff;
+    background: linear-gradient(180deg, #174b81, #10345d);
+}
+
+.operations-dashboard-layout .ops-incident-filter span {
+    color: #b9dcff;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+.operations-dashboard-layout .ops-incidents-table-wrap {
+    flex: 1;
+    min-height: 0;
+}
+
+.operations-dashboard-layout .ops-incidents-table {
+    min-width: 980px;
+}
+
+.operations-dashboard-layout .ops-incidents-table th {
+    padding: 9px 10px;
+    border-bottom-color: #2860a2;
+    color: #e2eeff;
+    background: linear-gradient(180deg, #164f97, #123e78);
+    text-transform: uppercase;
+    letter-spacing: 0.045em;
+}
+
+.operations-dashboard-layout .ops-incidents-table td {
+    padding: 8px 10px;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-incidents-table td:first-child {
+    display: table-cell;
+    width: 36px;
+    color: #a9c5e7;
+    text-align: center;
+}
+
+.operations-dashboard-layout .ops-incidents-table tbody tr:nth-child(even) td {
+    background: rgb(22 69 125 / 17%);
+}
+
+.operations-dashboard-layout .ops-incidents-table tbody tr:hover td {
+    background: rgb(38 117 204 / 22%);
+}
+
+.operations-dashboard-layout .ops-incidents-table td:nth-child(3) {
+    min-width: 220px;
+    white-space: normal;
+}
+
+.operations-dashboard-layout .ops-incident-link {
+    color: #e7f2ff;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.operations-dashboard-layout .ops-incident-link:hover {
+    color: #9acbff;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.operations-dashboard-layout .ops-incidents-table td small {
+    display: block;
+    margin-top: 4px;
+    color: #91a8c3;
+    font-size: 10px;
+}
+
+.operations-dashboard-layout .ops-incident-priority {
+    display: inline-flex;
+    min-width: 58px;
+    justify-content: center;
+    padding: 4px 8px;
+    border: 1px solid #208eff;
+    border-radius: 999px;
+    color: #fff;
+    background: #0876db;
+    font-size: 9px;
+    font-weight: 650;
+    text-transform: uppercase;
+}
+
+.operations-dashboard-layout .ops-incident-priority.is-high,
+.operations-dashboard-layout .ops-incident-priority.is-critical {
+    border-color: #ff4d61;
+    color: #fff;
+    background: linear-gradient(180deg, #ff4658, #d80e2b);
+}
+
+.operations-dashboard-layout .ops-incident-priority.is-medium {
+    border-color: #ffb01f;
+    color: #fff;
+    background: linear-gradient(180deg, #ffb52e, #e87900);
+}
+
+.operations-dashboard-layout .ops-incident-priority.is-low {
+    border-color: #1ec5f4;
+    color: #fff;
+    background: linear-gradient(180deg, #13b7e9, #0874c9);
+}
+
+.operations-dashboard-layout .ops-ward-badge {
+    display: inline-flex;
+    padding: 4px 8px;
+    border: 1px solid #8a72e8;
+    border-radius: 999px;
+    color: #e2d9ff;
+    background: linear-gradient(180deg, #7148d8, #4931a0);
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.operations-dashboard-layout .ops-ward-badge.is-tone-0 {
+    border-color: #9a7aff;
+    color: #eee7ff;
+    background: linear-gradient(180deg, #754ee8, #4b32a7);
+}
+
+.operations-dashboard-layout .ops-ward-badge.is-tone-1 {
+    border-color: #35cf9b;
+    color: #d3ffef;
+    background: linear-gradient(180deg, #0d9b6e, #087450);
+}
+
+.operations-dashboard-layout .ops-ward-badge.is-tone-2 {
+    border-color: #38c8ed;
+    color: #dcf8ff;
+    background: linear-gradient(180deg, #078db9, #08658e);
+}
+
+.operations-dashboard-layout .ops-ward-badge.is-tone-3 {
+    border-color: #e17acb;
+    color: #ffe4fa;
+    background: linear-gradient(180deg, #c34ca9, #87367d);
+}
+
+.operations-dashboard-layout .ops-ward-badge.is-tone-4 {
+    border-color: #ffbf55;
+    color: #fff2d6;
+    background: linear-gradient(180deg, #d98516, #9b550e);
+}
+
+.operations-dashboard-layout .ops-ward-badge.is-unassigned {
+    border-color: #536d8b;
+    color: #bdcce0;
+    background: #193550;
+}
+
+.operations-dashboard-layout .ops-incident-location {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.operations-dashboard-layout .ops-incident-location > small {
+    min-width: 0;
+}
+
+.operations-dashboard-layout .ops-incident-map-link {
+    display: inline-grid;
+    flex: 0 0 23px;
+    width: 23px;
+    height: 23px;
+    place-items: center;
+    border: 1px solid #267fd4;
+    border-radius: 6px;
+    color: #a9dcff;
+    background: #103b65;
+    transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.operations-dashboard-layout .ops-incident-map-link:hover {
+    border-color: #45afff;
+    color: #fff;
+    background: #075fb0;
+    box-shadow: 0 0 9px rgb(23 137 255 / 28%);
+}
+
+.operations-dashboard-layout .ops-incident-map-link svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.operations-dashboard-layout .ops-incident-status {
+    display: inline-flex;
+    padding: 5px 8px;
+    border: 1px solid #3c5978;
+    border-radius: 999px;
+    color: #c6d8ec;
+    background: #17314f;
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+.operations-dashboard-layout .ops-incident-status.is-received,
+.operations-dashboard-layout .ops-incident-status.is-pending {
+    border-color: #8a6232;
+    color: #ffd28e;
+    background: linear-gradient(180deg, #ed920f, #b95e08);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-assigned {
+    border-color: #20c77e;
+    color: #e5fff2;
+    background: linear-gradient(180deg, #0cc66b, #058b50);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-dispatched {
+    border-color: #20c77e;
+    color: #e5fff2;
+    background: linear-gradient(180deg, #0cc66b, #058b50);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-en_route {
+    border-color: #ffb526;
+    color: #fff7e2;
+    background: linear-gradient(180deg, #ffae16, #e87508);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-arrived,
+.operations-dashboard-layout .ops-incident-status.is-on_site {
+    border-color: #ff4d61;
+    color: #fff;
+    background: linear-gradient(180deg, #ff4658, #d80e2b);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-in_progress,
+.operations-dashboard-layout .ops-incident-status.is-active {
+    border-color: #1689ff;
+    color: #fff;
+    background: linear-gradient(180deg, #087ff2, #0757c9);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-completed {
+    border-color: #20c77e;
+    color: #e5fff2;
+    background: linear-gradient(180deg, #0cc66b, #058b50);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-resolved,
+.operations-dashboard-layout .ops-incident-status.is-closed {
+    border-color: #20c77e;
+    color: #e5fff2;
+    background: linear-gradient(180deg, #0cc66b, #058b50);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-duplicate {
+    border-color: #8190a4;
+    color: #e2e8f0;
+    background: linear-gradient(180deg, #68788e, #445267);
+}
+
+.operations-dashboard-layout .ops-incident-status.is-transferred_to_112 {
+    border-color: #a276ff;
+    color: #f0e8ff;
+    background: linear-gradient(180deg, #8652e8, #5b35b8);
+}
+
+.operations-dashboard-layout .ops-muted-value,
+.operations-dashboard-layout .ops-incidents-empty {
+    color: #91a8c3;
+}
+
+.operations-dashboard-layout .ops-incident-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border: 1px solid #1689ff;
+    border-radius: 6px;
+    color: #fff;
+    background: linear-gradient(180deg, #087ff2, #0757c9);
+    font-size: 10px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.operations-dashboard-layout .ops-incident-action:hover {
+    background: linear-gradient(180deg, #2292ff, #0868e4);
+    box-shadow: 0 0 10px rgb(23 137 255 / 30%);
+}
+
+.operations-dashboard-layout .ops-incidents-empty {
+    padding: 26px 14px !important;
+    text-align: center;
+}
+
 .operations-dashboard-layout .ops-panel-heading {
     display: flex;
     min-height: 68px;
@@ -384,7 +1446,7 @@
 .operations-dashboard-layout .ops-panel-heading h2 {
     margin: 0;
     color: #eff5fd;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 650;
     letter-spacing: -0.015em;
 }
@@ -392,7 +1454,7 @@
 .operations-dashboard-layout .ops-panel-heading p {
     margin: 5px 0 0;
     color: var(--ops-muted);
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1.4;
 }
 
@@ -671,7 +1733,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-.operations-dashboard-layout .ops-recent-panel {
+.operations-dashboard-layout .ops-incoming-panel {
     display: flex;
     flex-direction: column;
 }
@@ -681,7 +1743,7 @@
     flex: 1;
     flex-direction: column;
     min-height: 0;
-    padding: 12px 16px 10px;
+    padding: 16px 20px 14px;
 }
 
 .operations-dashboard-layout .ops-activity-slides {
@@ -690,15 +1752,22 @@
 
 .operations-dashboard-layout .ops-activity-slide {
     display: grid;
-    gap: 9px;
-    min-height: 130px;
-    padding: 12px;
+    grid-template-columns: minmax(190px, 0.8fr) minmax(280px, 2fr) minmax(180px, 1fr);
+    grid-template-rows: auto auto auto;
+    align-items: center;
+    gap: 10px 22px;
+    min-height: 142px;
+    padding: 18px 22px;
     border: 1px solid rgb(164 195 232 / 14%);
     border-radius: 10px;
     color: inherit;
     background: rgb(5 22 42 / 38%);
     text-decoration: none;
     transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.operations-dashboard-layout .ops-activity-slide > * {
+    min-width: 0;
 }
 
 .operations-dashboard-layout .ops-activity-slide:hover {
@@ -711,15 +1780,17 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    grid-column: 1;
+    grid-row: 1;
 }
 
 .operations-dashboard-layout .ops-activity-kind {
-    padding: 4px 7px;
+    padding: 5px 9px;
     border: 1px solid #3b6b9b;
     border-radius: 999px;
     color: #b5d8ff;
     background: #173c64;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 750;
     letter-spacing: 0.06em;
 }
@@ -732,43 +1803,61 @@
 
 .operations-dashboard-layout .ops-activity-topline time {
     color: #91a8c3;
-    font-size: 10px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
 }
 
 .operations-dashboard-layout .ops-activity-job {
+    grid-column: 1;
+    grid-row: 2;
     color: #f1f6fd;
-    font-size: 15px;
+    font-size: 19px;
     font-weight: 700;
 }
 
 .operations-dashboard-layout .ops-activity-caller {
+    grid-column: 2;
+    grid-row: 1 / span 2;
     overflow-wrap: anywhere;
-    color: #c6d5e7;
-    font-size: 11px;
-    line-height: 1.5;
+    color: #e0ebf8;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.6;
 }
 
 .operations-dashboard-layout .ops-activity-description {
+    grid-column: 3;
+    grid-row: 1;
     color: #9fb3cc;
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: 15px;
+    line-height: 1.55;
 }
 
 .operations-dashboard-layout .ops-activity-status {
     justify-self: start;
-    padding: 4px 7px;
+    grid-column: 3;
+    grid-row: 2;
+    padding: 5px 9px;
     border-radius: 6px;
     color: #b4e8cc;
     background: #174432;
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 650;
+}
+
+.operations-dashboard-layout .ops-activity-remarks {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    overflow-wrap: anywhere;
+    color: #b6c8dd;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 .operations-dashboard-layout .ops-activity-refresh-status {
     margin: 0 0 8px;
     color: #a9c8e9;
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1.4;
 }
 
@@ -786,14 +1875,14 @@
     gap: 10px;
     padding-top: 8px;
     color: #aabbd0;
-    font-size: 11px;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
 }
 
 .operations-dashboard-layout .ops-activity-arrow {
     display: grid;
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     place-items: center;
     border: 1px solid #385877;
     border-radius: 8px;
@@ -809,9 +1898,35 @@
     background: #1a4775;
 }
 
+@media (max-width: 1100px) {
+    .operations-dashboard-layout .ops-activity-slide {
+        grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.8fr);
+    }
+
+    .operations-dashboard-layout .ops-activity-caller {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+    }
+
+    .operations-dashboard-layout .ops-activity-description {
+        grid-column: 1;
+        grid-row: 3;
+    }
+
+    .operations-dashboard-layout .ops-activity-status {
+        grid-column: 2;
+        grid-row: 3;
+    }
+
+    .operations-dashboard-layout .ops-activity-remarks {
+        grid-column: 1 / -1;
+        grid-row: 4;
+    }
+}
+
 .operations-dashboard-layout .ops-secondary-grid {
     display: grid;
-    grid-template-columns: minmax(220px, 0.82fr) minmax(340px, 1.35fr) minmax(190px, 0.7fr);
+    grid-template-columns: minmax(220px, 0.82fr) minmax(280px, 1.1fr) minmax(340px, 1.35fr) minmax(190px, 0.7fr);
     align-items: stretch;
     gap: 16px;
 }
@@ -1128,11 +2243,11 @@
 }
 
 @media (max-width: 900px) {
-    .operations-dashboard-layout .sidebar {
+    .operations-dashboard-page .sidebar {
         width: 226px;
     }
 
-    .operations-dashboard-layout .main-column {
+    .operations-dashboard-page .main-column {
         margin-left: 226px;
     }
 
@@ -1172,11 +2287,24 @@
 }
 
 @media (max-width: 760px) {
-    .operations-dashboard-layout .shell {
+    .operations-dashboard-layout .ops-incidents-map-view {
+        height: 260px;
+    }
+
+    .operations-dashboard-layout .ops-vehicle-header-tools {
+        flex-basis: 100%;
+        justify-content: flex-start;
+    }
+
+    .operations-dashboard-layout .ops-vehicle-header-tools .ops-table-search {
+        flex: 1 1 170px;
+    }
+
+    .operations-dashboard-page .shell {
         display: block;
     }
 
-    .operations-dashboard-layout .sidebar {
+    .operations-dashboard-page .sidebar {
         position: relative;
         flex: 0 0 100%;
         width: auto;
@@ -1189,16 +2317,16 @@
         border-bottom: 1px solid rgb(170 200 235 / 12%);
     }
 
-    .operations-dashboard-layout .sidebar .brand {
+    .operations-dashboard-page .sidebar .brand {
         margin: 0 4px 10px;
     }
 
-    .operations-dashboard-layout .sidebar .workspace,
-    .operations-dashboard-layout .sidebar-footer {
+    .operations-dashboard-page .sidebar .workspace,
+    .operations-dashboard-page .sidebar-footer {
         display: none;
     }
 
-    .operations-dashboard-layout .navigation {
+    .operations-dashboard-page .navigation {
         display: flex;
         gap: 8px;
         overflow-x: auto;
@@ -1207,18 +2335,18 @@
         scrollbar-width: thin;
     }
 
-    .operations-dashboard-layout .nav-group {
+    .operations-dashboard-page .nav-group {
         display: flex;
         flex: 0 0 auto;
         gap: 4px;
         margin: 0;
     }
 
-    .operations-dashboard-layout .nav-caption {
+    .operations-dashboard-page .nav-caption {
         display: none;
     }
 
-    .operations-dashboard-layout .nav-link {
+    .operations-dashboard-page .nav-link {
         flex: 0 0 auto;
         min-height: 36px;
         margin: 0;
@@ -1227,20 +2355,28 @@
         white-space: nowrap;
     }
 
-    .operations-dashboard-layout .nav-icon {
+    .operations-dashboard-page .nav-icon {
         width: 17px;
     }
 
-    .operations-dashboard-layout .main-column {
+    .operations-dashboard-page .main-column {
         width: 100%;
         margin-left: 0;
     }
 
-    .operations-dashboard-layout .topbar {
+    .operations-dashboard-page .topbar {
         position: relative;
         flex-wrap: wrap;
         gap: 10px;
         padding: 12px 16px;
+    }
+
+    .operations-dashboard-page .topbar-account {
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 8px;
+        min-width: 0;
     }
 
     .operations-dashboard-layout .app-heading strong {
@@ -1283,11 +2419,50 @@
     }
 
     .operations-dashboard-layout .ops-stat-card > div > span {
-        font-size: 11px;
+        font-size: 12px;
     }
 
     .operations-dashboard-layout .ops-stat-card strong {
-        font-size: 23px;
+        font-size: 25px;
+    }
+
+    .operations-dashboard-layout .ops-activity-carousel {
+        padding: 12px;
+    }
+
+    .operations-dashboard-layout .ops-activity-slide {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 14px;
+        min-height: 0;
+        padding: 16px;
+    }
+
+    .operations-dashboard-layout .ops-activity-topline,
+    .operations-dashboard-layout .ops-activity-job,
+    .operations-dashboard-layout .ops-activity-caller,
+    .operations-dashboard-layout .ops-activity-description,
+    .operations-dashboard-layout .ops-activity-status {
+        grid-column: auto;
+        grid-row: auto;
+    }
+
+    .operations-dashboard-layout .ops-activity-caller {
+        grid-column: 1 / -1;
+        font-size: 16px;
+    }
+
+    .operations-dashboard-layout .ops-activity-description {
+        grid-column: 1 / -1;
+        font-size: 14px;
+    }
+
+    .operations-dashboard-layout .ops-activity-remarks {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .operations-dashboard-layout .ops-activity-job {
+        font-size: 18px;
     }
 
     .operations-dashboard-layout .ops-map {
@@ -1331,6 +2506,19 @@
     .operations-dashboard-layout .ops-page-heading p {
         max-width: 34ch;
         font-size: 12px;
+    }
+
+    .operations-dashboard-layout .ops-activity-slide {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .operations-dashboard-layout .ops-activity-topline,
+    .operations-dashboard-layout .ops-activity-job,
+    .operations-dashboard-layout .ops-activity-caller,
+    .operations-dashboard-layout .ops-activity-description,
+    .operations-dashboard-layout .ops-activity-status,
+    .operations-dashboard-layout .ops-activity-remarks {
+        grid-column: 1;
     }
 
     .operations-dashboard-layout .ops-side-stack {
@@ -1481,6 +2669,7 @@
 }
 
 .operations-dashboard-page.sidebar-hidden .main-column {
+    width: calc(100% - 68px);
     margin-left: 68px;
 }
 
@@ -1729,3 +2918,487 @@
         margin-left: auto;
     }
 }
+
+@media (min-width: 1181px) {
+    .operations-dashboard-layout .topbar {
+        min-height: 66px;
+        padding: 10px 22px;
+    }
+
+    .operations-dashboard-layout .content {
+        padding: 14px 20px 10px;
+    }
+
+    .operations-dashboard-layout .main-column > .footer {
+        display: none;
+    }
+
+    .operations-dashboard-layout .ops-dashboard {
+        min-height: calc(100vh - 90px);
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        grid-template-rows:
+            auto
+            auto
+            auto
+            minmax(280px, 1fr)
+            minmax(380px, auto);
+        grid-template-areas:
+            "notice notice notice notice notice notice notice notice notice notice notice notice"
+            "help help help help help help help help help help help help"
+            "stats stats stats stats stats stats stats stats stats stats stats stats"
+            "incidents incidents incidents incidents incidents incidents incidents incidents incidents incidents incidents incidents"
+            "vehicles vehicles vehicles vehicles vehicles vehicles vehicles vehicles vehicles vehicles vehicles vehicles";
+        gap: 12px;
+    }
+
+    .operations-dashboard-layout .ops-dashboard > .notice { grid-area: notice; }
+    .operations-dashboard-layout .ops-help-alerts { grid-area: help; }
+    .operations-dashboard-layout .ops-stat-grid { grid-area: stats; }
+    .operations-dashboard-layout .ops-incidents-panel { grid-area: incidents; }
+    .operations-dashboard-layout .ops-vehicles-panel { grid-area: vehicles; }
+
+    .operations-dashboard-layout .ops-page-heading {
+        align-items: center;
+        min-height: 52px;
+    }
+
+    .operations-dashboard-layout .ops-page-kicker {
+        color: #7ddac8;
+        font-size: 10px;
+        letter-spacing: 0.16em;
+    }
+
+    .operations-dashboard-layout .ops-page-heading h1 {
+        margin-top: 3px;
+        font-size: 25px;
+    }
+
+    .operations-dashboard-layout .ops-page-heading p {
+        font-size: 12px;
+    }
+
+    .operations-dashboard-layout .ops-stat-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .operations-dashboard-layout .ops-stat-card {
+        min-height: 76px;
+        gap: 11px;
+        padding: 11px 13px;
+        border-color: rgb(149 184 224 / 13%);
+        border-radius: 12px;
+        background: linear-gradient(145deg, #102743, #0b1f38);
+        box-shadow: 0 7px 20px rgb(0 8 20 / 12%);
+    }
+
+    .operations-dashboard-layout .ops-stat-card.ops-stat-blue {
+        border-color: rgb(68 151 255 / 54%);
+        background: linear-gradient(115deg, #1555a5, #0b2f68);
+    }
+
+    .operations-dashboard-layout .ops-stat-card.ops-stat-orange {
+        border-color: rgb(255 165 51 / 48%);
+        background: linear-gradient(115deg, #a95508, #4a2b13);
+    }
+
+    .operations-dashboard-layout .ops-stat-card.ops-stat-green {
+        border-color: rgb(54 218 151 / 48%);
+        background: linear-gradient(115deg, #08754b, #104634);
+    }
+
+    .operations-dashboard-layout .ops-stat-card.ops-stat-purple {
+        border-color: rgb(175 123 255 / 48%);
+        background: linear-gradient(115deg, #5735a7, #30225f);
+    }
+
+    .operations-dashboard-layout .ops-stat-card.ops-stat-cyan {
+        border-color: rgb(71 210 230 / 48%);
+        background: linear-gradient(115deg, #087d9a, #10465e);
+    }
+
+    .operations-dashboard-layout .ops-stat-icon {
+        flex-basis: 38px;
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        font-size: 17px;
+    }
+
+    .operations-dashboard-layout .ops-stat-card > div {
+        gap: 4px;
+    }
+
+    .operations-dashboard-layout .ops-stat-card > div > span {
+        color: #9eb1c8;
+        font-size: 11px;
+    }
+
+    .operations-dashboard-layout .ops-stat-card strong {
+        font-size: 25px;
+    }
+
+    .operations-dashboard-layout .ops-panel {
+        border-color: rgb(149 184 224 / 13%);
+        border-radius: 13px;
+        background: linear-gradient(155deg, #0e2541, #0a1c33);
+        box-shadow: 0 9px 24px rgb(0 8 20 / 13%);
+    }
+
+    .operations-dashboard-layout .ops-panel-heading {
+        min-height: 54px;
+        padding: 10px 13px;
+    }
+
+    .operations-dashboard-layout .ops-panel-heading h2 {
+        font-size: 14px;
+    }
+
+    .operations-dashboard-layout .ops-panel-heading p {
+        margin-top: 3px;
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-panel-heading > a:not(.ops-map-action),
+    .operations-dashboard-layout .ops-map-action {
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-incidents-panel,
+    .operations-dashboard-layout .ops-incoming-panel,
+    .operations-dashboard-layout .ops-station-panel,
+    .operations-dashboard-layout .ops-map-panel {
+        min-height: 0;
+    }
+
+    .operations-dashboard-layout .ops-activity-carousel {
+        padding: 9px 10px 7px;
+    }
+
+    .operations-dashboard-layout .ops-activity-slide {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto auto auto auto;
+        align-content: center;
+        gap: 6px 9px;
+        min-height: 0;
+        padding: 10px 11px;
+        border-radius: 9px;
+        background: rgb(4 17 32 / 45%);
+    }
+
+    .operations-dashboard-layout .ops-activity-topline {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .operations-dashboard-layout .ops-activity-kind {
+        padding: 3px 7px;
+        font-size: 9px;
+    }
+
+    .operations-dashboard-layout .ops-activity-topline time {
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-activity-job {
+        grid-column: 1;
+        grid-row: 2;
+        font-size: 14px;
+    }
+
+    .operations-dashboard-layout .ops-activity-caller {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 11px;
+        line-height: 1.4;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 1;
+    }
+
+    .operations-dashboard-layout .ops-activity-description {
+        grid-column: 1;
+        grid-row: 4;
+        font-size: 10px;
+        line-height: 1.35;
+    }
+
+    .operations-dashboard-layout .ops-activity-status {
+        grid-column: 2;
+        grid-row: 2 / span 3;
+        padding: 4px 6px;
+        font-size: 9px;
+    }
+
+    .operations-dashboard-layout .ops-activity-remarks {
+        display: -webkit-box;
+        grid-column: 1 / -1;
+        grid-row: 5;
+        overflow: hidden;
+        font-size: 9px;
+        line-height: 1.3;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 1;
+    }
+
+    .operations-dashboard-layout .ops-activity-controls {
+        gap: 7px;
+        padding-top: 5px;
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-activity-arrow {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        font-size: 16px;
+    }
+
+    .operations-dashboard-layout .ops-map-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .operations-dashboard-layout .ops-map-panel .ops-panel-heading {
+        gap: 6px 10px;
+        padding: 9px 12px;
+    }
+
+    .operations-dashboard-layout .ops-map-legend {
+        gap: 8px;
+        font-size: 9px;
+    }
+
+    .operations-dashboard-layout .ops-map-legend i {
+        width: 8px;
+        height: 8px;
+    }
+
+    .operations-dashboard-layout .ops-map {
+        flex: 1;
+        min-height: 290px;
+        height: auto;
+        margin: 8px;
+        border-color: #284565;
+        border-radius: 10px;
+        background:
+            radial-gradient(ellipse at 18% 72%, rgb(33 125 105 / 16%), transparent 29%),
+            radial-gradient(ellipse at 82% 18%, rgb(34 103 151 / 20%), transparent 32%),
+            radial-gradient(circle, rgb(145 177 209 / 10%) 1px, transparent 1.5px),
+            linear-gradient(145deg, #102d49, #0b2239 62%, #102b45);
+        background-size: auto, auto, 22px 22px, auto;
+        box-shadow: inset 0 0 45px rgb(1 11 22 / 28%);
+    }
+
+    .operations-dashboard-layout .map-park {
+        border-color: rgb(76 174 141 / 23%);
+        background: #135143;
+        opacity: 0.38;
+    }
+
+    .operations-dashboard-layout .map-river {
+        border-color: rgb(74 150 202 / 18%);
+        background: #15466a;
+        opacity: 0.4;
+    }
+
+    .operations-dashboard-layout .map-road {
+        height: 2px;
+        border: 0;
+        background: rgb(131 169 197 / 35%);
+        box-shadow: 0 0 0 1px rgb(13 36 57 / 70%);
+    }
+
+    .operations-dashboard-layout .map-city-label {
+        border-color: rgb(138 175 209 / 21%);
+        color: #d3e4f4;
+        background: rgb(10 31 51 / 82%);
+        font-size: 11px;
+    }
+
+    .operations-dashboard-layout .map-marker {
+        width: 28px;
+        height: 28px;
+        border-width: 2px;
+        box-shadow: 0 0 0 5px rgb(61 142 225 / 14%), 0 4px 12px rgb(0 8 20 / 42%);
+    }
+
+    .operations-dashboard-layout .map-marker-incident {
+        box-shadow: 0 0 0 5px rgb(236 105 94 / 16%), 0 4px 12px rgb(0 8 20 / 42%);
+    }
+
+    .operations-dashboard-layout .map-marker-vehicle {
+        box-shadow: 0 0 0 5px rgb(42 183 133 / 16%), 0 4px 12px rgb(0 8 20 / 42%);
+    }
+
+    .operations-dashboard-layout .map-empty {
+        color: #b7cce1;
+        font-size: 12px;
+    }
+
+    .operations-dashboard-layout .map-scale {
+        border-color: rgb(135 171 207 / 20%);
+        color: #b5cbe0;
+        background: rgb(9 29 48 / 88%);
+    }
+
+    .operations-dashboard-layout .ops-side-stack {
+        display: contents;
+    }
+
+    .operations-dashboard-layout .ops-station-panel {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .operations-dashboard-layout .ops-station-list {
+        flex: 1;
+        min-height: 0;
+        padding: 0 12px;
+        overflow: auto;
+    }
+
+    .operations-dashboard-layout .ops-station-row {
+        grid-template-columns: 8px minmax(0, 1fr) auto auto;
+        gap: 8px;
+        min-height: 35px;
+    }
+
+    .operations-dashboard-layout .ops-station-name {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .operations-dashboard-layout .ops-station-name strong {
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-station-name small {
+        display: none;
+    }
+
+    .operations-dashboard-layout .ops-station-metric {
+        gap: 2px;
+        min-width: 39px;
+    }
+
+    .operations-dashboard-layout .ops-station-metric small {
+        font-size: 8px;
+    }
+
+    .operations-dashboard-layout .ops-station-metric strong {
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-table-wrap {
+        flex: 1;
+        min-height: 0;
+        padding: 2px 10px;
+        overflow: auto;
+    }
+
+    .operations-dashboard-layout .ops-table th,
+    .operations-dashboard-layout .ops-table td {
+        padding: 7px 8px;
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-table td small {
+        font-size: 8px;
+    }
+
+    .operations-dashboard-layout .ops-total-strip {
+        margin: 5px 10px 9px;
+        padding: 8px 10px;
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-secondary-grid > .ops-panel:nth-child(2) {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .operations-dashboard-layout .ops-job-detail {
+        overflow-y: auto;
+    }
+
+    .operations-dashboard-layout .ops-job-detail > .ops-panel-heading {
+        position: sticky;
+        z-index: 1;
+        top: 0;
+        background: #0e2541;
+    }
+
+    .operations-dashboard-layout .ops-job-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px 10px;
+        padding: 9px 12px;
+    }
+
+    .operations-dashboard-layout .ops-job-facts > div {
+        gap: 2px;
+    }
+
+    .operations-dashboard-layout .ops-job-facts span {
+        font-size: 8px;
+    }
+
+    .operations-dashboard-layout .ops-job-facts strong {
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 10px;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .operations-dashboard-layout .ops-assignment-list {
+        gap: 5px;
+        padding: 0 12px 7px;
+    }
+
+    .operations-dashboard-layout .ops-assignment-list > div {
+        gap: 6px;
+        font-size: 9px;
+    }
+
+    .operations-dashboard-layout .ops-timeline {
+        gap: 7px;
+        padding: 5px 12px 10px;
+    }
+
+    .operations-dashboard-layout .ops-timeline > div {
+        gap: 4px;
+        font-size: 8px;
+    }
+
+    .operations-dashboard-layout .ops-quick-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+        padding: 10px;
+    }
+
+    .operations-dashboard-layout .ops-quick-grid a {
+        min-height: 36px;
+        gap: 7px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 10px;
+    }
+
+    .operations-dashboard-layout .ops-quick-grid a span {
+        font-size: 13px;
+    }
+
+    .operations-dashboard-layout .ops-footer {
+        gap: 12px;
+        padding-top: 2px;
+        font-size: 9px;
+    }
+}
+.notification-link{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.notification-link svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.notification-count{display:inline-grid;min-width:17px;height:17px;padding:0 4px;place-items:center;border-radius:999px;background:#d9343a;color:#fff;font-size:10px;font-weight:700;line-height:1}
+.notification-count[hidden],.notification-toast[hidden]{display:none}.notification-toast{position:fixed;right:20px;top:76px;z-index:20;display:grid;gap:5px;width:min(340px,calc(100vw - 32px));padding:14px 16px;border:1px solid #3b6793;border-radius:10px;background:#102b4f;color:#eaf2fc;box-shadow:0 12px 32px #0005;font-size:13px}.notification-toast span{color:#c6d6e9}.notification-toast a{color:#70b4ff;font-weight:600}

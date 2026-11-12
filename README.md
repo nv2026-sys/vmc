@@ -6,11 +6,11 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 
 - Sanctum bearer-token login, current-user, and logout endpoints.
 - Seeded system roles and permissions with role/permission middleware.
-- PostgreSQL migrations for users, stations, wards, station membership, RBAC, tokens, and audit events.
+- MySQL/MariaDB migrations for users, stations, wards, station membership, RBAC, tokens, and audit events.
 - Optional initial super-admin creation from private `.env` values. No demo user or default password is created.
 - Login throttling (five attempts per minute per IP/email) and eight-hour token expiration by default.
 - Server-rendered dashboard and searchable master-data directories use Laravel session authentication and station-level access checks.
-- Dashboard summaries and recent-incident listings use live, station-scoped PostgreSQL records and respect the viewer's role permissions.
+- Dashboard summaries and recent-incident listings use live, station-scoped database records and respect the viewer's role permissions.
 - Hierarchical user administration assigns roles and stations only within the manager's scope, records account changes, and revokes tokens when an account is disabled.
 - Automated auth, RBAC, and station-scope tests.
 
@@ -34,7 +34,7 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 ### Phase 4 implementation
 
 - Assign multiple available vehicles, optionally paired with teams, to one incident in a single transaction. Assignment checks station scope, ward coverage, active station/resource state, and prevents duplicate or already-deployed resources.
-- Track each unit through `ASSIGNED → EN_ROUTE → ARRIVED → IN_PROGRESS → COMPLETED`; reject skipped or invalid transitions and capture optional notes and coordinates.
+- Set each unit to any supported status (`ASSIGNED`, `EN_ROUTE`, `ARRIVED`, `IN_PROGRESS`, or `COMPLETED`) at any time; completed assignments can be reopened, with every change retained in status history.
 - Update vehicle/team availability on dispatch and release, derive the incident's aggregate status from all assignments, and audit each dispatch/status change.
 - Vehicle drivers can update only assignments for their assigned team leader or active team membership; station membership alone does not grant driver access to other units.
 - Active, assigned, en-route, arrived, in-progress, and completed job queues show live, station-scoped incident records.
@@ -74,12 +74,12 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 
 - Set `APP_ENV=production`, `APP_DEBUG=false`, a unique secret `APP_KEY`, and an HTTPS `APP_URL`; configure trusted proxies and hosts for the actual reverse-proxy topology.
 - The application defaults to `Asia/Kolkata` for Vadodara operations; set `APP_TIMEZONE` explicitly if deploying to a different operating timezone.
-- Set `SESSION_SECURE_COOKIE=true`, keep `SESSION_HTTP_ONLY=true` and `SESSION_SAME_SITE=lax`, and use a strong private PostgreSQL credential with network access restricted to the application.
-- Require PHP 8.2+ with `pdo_pgsql`, `gd`, and `zip`; run `composer install --no-dev --prefer-dist --optimize-autoloader` and `php artisan migrate --force`.
+- Set `SESSION_SECURE_COOKIE=true`, keep `SESSION_HTTP_ONLY=true` and `SESSION_SAME_SITE=lax`, and use a dedicated MySQL login with a secret supplied by the deployment secret store. Allow database traffic only from the application host and configure TLS with a trusted CA when required by the database host.
+- Require PHP 8.2+ with `pdo_mysql`, `gd`, and `zip`, plus MySQL 8.0+ or MariaDB 10.4+. Run `composer install --no-dev --prefer-dist --optimize-autoloader` and `php artisan migrate --force` with a deployment login that has schema-change permission.
 - Run `composer audit` during release preparation and update affected dependencies before deployment.
 - Seed system permissions when upgrading, then prepare configuration, route, and view caches with `php artisan config:cache`, `php artisan route:cache`, and `php artisan view:cache`.
 - Keep `storage/` and `bootstrap/cache/` writable by the application user; configure persistent database/Redis cache, session, and queue services appropriate to the deployment.
-- Run queue workers under a process manager, configure scheduled tasks and log rotation, and verify PostgreSQL backups and restore procedures before production traffic.
+- Run queue workers under a process manager, configure scheduled tasks and log rotation, and verify MySQL backups and restore procedures before production traffic.
 - Serve only over HTTPS, restrict inbound database access, keep `.env` and generated exports private, and monitor `/up`, queue failures, authentication throttles, and application errors.
 
 ### Recommended project structure
@@ -104,9 +104,9 @@ tests/Feature/                API and workflow tests
 tests/Unit/                   Isolated domain tests
 ```
 
-### PostgreSQL ER design
+### Relational ER design
 
-Application identifiers use `BIGINT`; dispatch-domain date/time values use `TIMESTAMPTZ`. Foreign keys are explicit, operational data uses soft deletes where appropriate, and job status changes are designed as immutable history rows.
+Application identifiers use `BIGINT`; MySQL stores dispatch timestamps without per-value timezone offsets, so configure the application timezone consistently across application and database hosts. Foreign keys are explicit, operational data uses soft deletes where appropriate, and job status changes are designed as immutable history rows.
 
 | Table | Core columns | Relationships / constraints |
 |---|---|---|
@@ -132,27 +132,30 @@ Application identifiers use `BIGINT`; dispatch-domain date/time values use `TIME
 | `notifications` | Laravel notification ID, `notifiable_type/id`, type, JSON data, `read_at`, `created_at` | Polymorphic recipient; retain Laravel's UUID notification ID. |
 | `audit_logs` | `id`, nullable actor, event, subject type/id, IP/user agent, JSON metadata, `created_at` | Append-only event log; actor FK becomes null when a user is removed. |
 
-Application primary keys and foreign keys use `BIGINT`; the Laravel notification table retains its framework UUID ID. Dispatch-domain date/time values use `TIMESTAMPTZ`, and status values use constrained domain codes. `emergency_jobs` has one-to-many call logs, assignments, status history, remarks, and external references. `job_assignments` is the only job-to-vehicle/team association; vehicle availability must be locked and checked transactionally when dispatching so a vehicle cannot be double-booked. Duplicate closure and transfer to 112 remain distinct job statuses. Station membership and authorization are separate checks: a permission does not grant access to another station's records.
+Application primary keys and foreign keys use `BIGINT`; the Laravel notification table retains its framework UUID ID. MySQL stores dispatch timestamps without per-value timezone offsets, and status values use constrained domain codes. `emergency_jobs` has one-to-many call logs, assignments, status history, remarks, and external references. `job_assignments` is the only job-to-vehicle/team association; vehicle availability must be locked and checked transactionally when dispatching so a vehicle cannot be double-booked. Duplicate closure and transfer to 112 remain distinct job statuses. Station membership and authorization are separate checks: a permission does not grant access to another station's records.
 
 The migrations establish the identity and authorization tables as well as `vehicles`, `teams`, `team_members`, `emergency_jobs`, `job_call_logs`, `job_assignments`, `job_status_history`, `job_remarks`, `vehicle_gps_logs`, `job_external_references`, and Laravel `notifications`. Phase 2 provides searchable directories and create, update, and safe archive workflows for stations, wards, vehicles, teams, and team membership. All writes are permission-checked, station-scoped, transactional, validated, and audit logged. Records with operational dependencies cannot be archived.
 
 ### Setup
 
-Requirements: PHP 8.2+ with `pdo_pgsql`, `gd`, and `zip` extensions; Composer; and PostgreSQL. The server-rendered pages do not require Node.js/npm.
+Requirements: PHP 8.2+ with `pdo_mysql`, `gd`, and `zip`; Composer; and a reachable MySQL 8.0+ or MariaDB 10.4+ server. The server-rendered pages do not require Node.js/npm.
 
-1. Copy `.env.example` to `.env` and set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` for a PostgreSQL database you created.
-2. Set `INITIAL_SUPER_ADMIN_EMAIL` and a private `INITIAL_SUPER_ADMIN_PASSWORD` of at least 14 characters before seeding if an initial administrator is needed.
-3. Run:
+1. As a database administrator, run `mysql -u root -p < database/mysql/setup.sql` to create the `emergency_dispatch` database.
+2. Create a dedicated runtime login using a deployment-managed secret, then grant it only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `emergency_dispatch.*`. Use a separate deployment login with schema-change permissions for migrations.
+3. Copy `.env.example` to `.env`. Set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` through deployment configuration/secrets. Configure `MYSQL_ATTR_SSL_CA` when the database host requires TLS with a CA certificate.
+4. Generate `APP_KEY` once for a new environment; set `APP_ENV=production`, `APP_DEBUG=false`, and the HTTPS `APP_URL`. Set `INITIAL_SUPER_ADMIN_EMAIL` and a private `INITIAL_SUPER_ADMIN_PASSWORD` of at least 14 characters if creating the first administrator.
+5. Before initial migration, temporarily provide Laravel with a deployment SQL login that has permission to create/alter tables in `emergency_dispatch`, then run:
 
    ```powershell
-   composer install
-   php artisan key:generate
-   php artisan migrate --seed
+   composer install --no-dev --prefer-dist --optimize-autoloader
+   php artisan migrate --force
+   php artisan db:seed --class=RbacSeeder --force
    ```
 
-4. Start the API with `php artisan serve`. Routes are listed by `php artisan route:list --path=api`.
+6. Replace the migration credentials with the restricted `vmc_app` runtime credentials, then run `php artisan config:cache`, `php artisan route:cache`, and `php artisan view:cache`. Restart the web and queue-worker processes so they load the production configuration.
+7. Deploy behind HTTPS and verify the database connection, login, `/up`, and `php artisan route:list --path=api`. Keep production data out of demo seeders; fictional demo records are seeded only in the local environment.
 
-Do not commit `.env` or use a default/shared administrator password. If no initial admin credentials are configured, seeding creates the system roles and prints a warning without creating a login.
+Do not commit `.env`, put credentials in the SQL setup script, or use a default/shared administrator or database password. If no initial admin credentials are configured, seeding creates the system roles and prints a warning without creating a login.
 After upgrading an existing deployment, run `php artisan db:seed --class=RbacSeeder` to add the archive and report-export permissions to existing system roles.
 
 ### User hierarchy and local demo records
@@ -166,15 +169,35 @@ php artisan db:seed --class=RbacSeeder
 php artisan db:seed --class=DemoDispatchSeeder
 ```
 
-The demo seeder runs only in local/testing environments and is repeatable. It creates sample vehicles, response teams, a team membership, three incidents in received/en-route/transferred states, call logs, an assignment, status history, a remark, a GPS point, a 112 handoff reference, and a notification. Re-running it refreshes the sample incident, status-history, notification, and GPS timestamps so the dashboard ticker and mobile flow can be exercised with recent records. All records are explicitly marked as fictional demo drills and are not real emergency data. Demo accounts use `example.test` emails with randomly generated, undisclosed passwords. Sign in as a securely configured super administrator and set individual demo passwords from User management before testing those accounts. Demo account emails are `control.room@example.test`, `central.admin@example.test`, `north.admin@example.test`, `central.dispatch@example.test`, `north.dispatch@example.test`, `vehicle.driver@example.test`, `team.member@example.test`, and `report.viewer@example.test`.
+The demo seeder runs only in local/testing environments and is repeatable. It creates sample vehicles, response teams, a team membership, three incidents in received/en-route/transferred states, call logs, an assignment, status history, a remark, a GPS point, a 112 handoff reference, and a notification. Re-running it refreshes the sample incident, status-history, notification, and GPS timestamps so the dashboard ticker and mobile flow can be exercised with recent records. All records are explicitly marked as fictional demo drills and are not real emergency data. Demo accounts use `example.test` emails with randomly generated, undisclosed passwords. Sign in as a securely configured super administrator and set individual demo passwords from User management before testing those accounts. Demo account emails are `control.room@example.test`, `central.admin@example.test`, `north.admin@example.test`, `central.dispatch@example.test`, `north.dispatch@example.test`, `vehicle.driver@example.test`, `north.vehicle.driver@example.test`, `team.member@example.test`, and `report.viewer@example.test`.
 
 ### Authentication API
 
-- `POST /api/v1/auth/login` — accepts `email`, `password`, and optional `device_name`; returns a Sanctum bearer token.
+- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). Driver GPS coordinates are recorded for the linked vehicle using the normal On Road tracking rules. The response includes that vehicle's latest location under `data.vehicle.location`.
 - `GET /api/v1/auth/me` — requires `Authorization: Bearer <token>`; returns the user, role/permission codes, and assigned station IDs.
 - `POST /api/v1/auth/logout` — requires a bearer token and revokes that token.
 
 Login input is normalized and validated. Inactive and unknown accounts receive the same authentication error. Add `permission:<code>` after `auth:sanctum` on protected routes; station-scoped queries must also enforce the user's station access.
+
+### Driver assignment API
+
+The mobile driver workflow is authenticated and restricted to the assigned vehicle driver. Assignment actions accept either the numeric assignment ID or the public incident `job_id` in the path:
+
+- `GET /api/v1/driver/assignments/active` — returns the driver's latest active assignment, or `data: null`.
+- `POST /api/v1/driver/assignments/{assignment}/attend` — sets the active assignment to `EN_ROUTE`; optional device coordinates also record a GPS point.
+- `POST /api/v1/driver/assignments/{assignment}/decline` — declines only a pending assignment and releases its allocation.
+- `POST /api/v1/driver/assignments/{assignment}/escalate` and `/need-help` — append incident remarks and notify active control-room administrators.
+- The `/need-help` endpoint accepts `helpType` (`AMBULANCE`, `WATER_TANKER`, `VEHICLE_BREAKDOWN`, `ACCIDENT`, `MEDICAL_EMERGENCY`, `FIRE_EQUIPMENT_PROBLEM`, `ROUTE_PROBLEM`, or `OTHER`) and optional `comments`. It includes driver, vehicle, station, team, incident, and timestamp details in the control-room notification, which appears in the dashboard's Driver help requests panel. The legacy `reason` field remains supported.
+- `POST /api/v1/driver/assignments/{assignment}/reached` — sets the active assignment to `ARRIVED` and can record device coordinates.
+- `POST /api/v1/driver/assignments/{assignment}/report-issues` — appends selected issues and remarks to the incident history.
+- `POST /api/v1/driver/assignments/{assignment}/complete` — sets the active assignment to `COMPLETED`, releasing it.
+- `POST /api/v1/driver/assignments/{assignment}/close` — appends a final close remark after completion.
+
+All lifecycle changes use the existing assignment and status-history records. VMC route history is available through `GET /api/v1/vehicles/{vehicle}/gps`; the API does not send device coordinates to an external routing service.
+
+### User notifications
+
+Authenticated web users can open **Notifications** from the top bar to see their own assignment and vehicle status alerts, mark one notification read, or mark all as read. New dispatches notify the assigned driver and team; status and On Road/Off Road changes notify the other assignment participants and authorized users for that station, plus authorized control-room administrators. Notifications are stored in Laravel's `notifications` table and are scoped to each recipient. Driver apps can retrieve and mark their own notifications through `GET /api/v1/fleet/notifications` and `PATCH /api/v1/fleet/notifications/{notificationId}/read`.
 
 ### Master-data API
 
@@ -195,11 +218,11 @@ vendor\bin\pint.bat --test
 composer audit
 ```
 
-Tests use SQLite in memory. Configure PostgreSQL credentials before running PostgreSQL migrations locally.
+Tests use SQLite in memory by default. Configure a separate MySQL test database if validating MySQL migrations and behavior.
 
 ### Development phases
 
-1. **Foundation (implemented):** inspect/scaffold, PostgreSQL configuration, API auth, RBAC, station/ward schema.
+1. **Foundation (implemented):** inspect/scaffold, MySQL configuration, API auth, RBAC, station/ward schema.
 2. **Master data (implemented):** searchable station, ward, vehicle, and team directories; station-scoped create/update/archive forms and APIs; team membership; role-based permissions; audit logging.
 3. **Incident intake (implemented):** incident registration, caller search, duplicate detection, and 112 handoff workflows.
 4. **Dispatch operations (implemented):** multi-vehicle assignment, sequential status transitions, timeline, and history.

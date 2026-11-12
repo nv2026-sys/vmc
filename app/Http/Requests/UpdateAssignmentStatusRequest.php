@@ -12,12 +12,29 @@ class UpdateAssignmentStatusRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $status = $this->input('status');
+        if (! is_string($status)) {
+            return;
+        }
+
+        $status = strtoupper(str_replace([' ', '-'], '_', trim($status)));
+        $status = match ($status) {
+            'STARTED' => 'EN_ROUTE',
+            'REACHED', 'ON_SITE' => 'ARRIVED',
+            default => $status,
+        };
+
+        $this->merge(['status' => $status]);
+    }
+
     public function rules(): array
     {
         return [
             'status' => [
                 'required',
-                Rule::in(['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED']),
+                Rule::in(['ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED']),
             ],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],

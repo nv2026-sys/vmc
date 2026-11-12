@@ -3,15 +3,19 @@
 use App\Http\Controllers\IncidentArchiveController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperationsReportController;
 use App\Http\Controllers\OperationsReportExportController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\RoleManagementController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\VehicleTrackingController;
 use App\Http\Controllers\WebAuthController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [PageController::class, 'dashboard'])->name('home');
+Route::get('/', [PageController::class, 'dashboard'])
+    ->middleware('auth')
+    ->name('home');
 Route::get('/login', [WebAuthController::class, 'create'])->name('login');
 Route::post('/login', [WebAuthController::class, 'store'])
     ->middleware('throttle:login')
@@ -19,11 +23,26 @@ Route::post('/login', [WebAuthController::class, 'store'])
 Route::post('/logout', [WebAuthController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
+Route::middleware('auth')->group(function (): void {
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/latest', [NotificationController::class, 'latest'])->name('notifications.latest');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('/notifications/{notificationId}/read', [NotificationController::class, 'markRead'])
+        ->name('notifications.read');
+});
 
-Route::get('/dashboard', [PageController::class, 'dashboard'])->name('dashboard');
+Route::get('/dashboard', [PageController::class, 'dashboard'])
+    ->middleware('auth')
+    ->name('dashboard');
+Route::get('/dashboard/map-data', [PageController::class, 'dashboardMapData'])
+    ->middleware(['auth', 'permission:dashboard.view', 'permission:gps.view', 'permission:jobs.view'])
+    ->name('dashboard.map-data');
 Route::get('/dashboard/activity', [PageController::class, 'dashboardActivity'])
     ->middleware(['auth', 'permission:jobs.view'])
     ->name('dashboard.activity');
+Route::get('/dashboard/help-requests', [PageController::class, 'dashboardHelpRequests'])
+    ->middleware(['auth', 'permission:dashboard.view', 'permission:jobs.view'])
+    ->name('dashboard.help-requests');
 
 foreach (['stations', 'wards', 'vehicles', 'teams'] as $kind) {
     Route::middleware(['auth', 'permission:'.$kind.'.manage'])->group(function () use ($kind): void {
@@ -60,6 +79,11 @@ Route::middleware(['auth', 'permission:users.manage'])->group(function (): void 
 Route::get('/users/{managedUser}', [UserManagementController::class, 'show'])
     ->middleware(['auth', 'permission:users.view'])
     ->name('users.show');
+
+Route::middleware(['auth', 'permission:roles.manage'])->group(function (): void {
+    Route::get('/roles/create', [RoleManagementController::class, 'create'])->name('app.roles.create');
+    Route::post('/roles', [RoleManagementController::class, 'store'])->name('app.roles.store');
+});
 
 Route::middleware(['auth', 'permission:jobs.create'])->group(function (): void {
     Route::get('/jobs/new', [IncidentController::class, 'create'])->name('app.jobs.new');
@@ -99,9 +123,15 @@ Route::patch('/jobs/{job}/assignments/{assignmentId}/status', [IncidentControlle
 Route::get('/tracking', [VehicleTrackingController::class, 'index'])
     ->middleware(['auth', 'permission:gps.view'])
     ->name('app.tracking');
+Route::get('/tracking/map-data', [VehicleTrackingController::class, 'mapData'])
+    ->middleware(['auth', 'permission:gps.view'])
+    ->name('app.tracking.map-data');
 Route::get('/reports', [OperationsReportController::class, 'index'])
     ->middleware(['auth', 'permission:reports.view'])
     ->name('app.reports');
+Route::get('/reports/data', [OperationsReportController::class, 'data'])
+    ->middleware(['auth', 'permission:reports.view'])
+    ->name('app.reports.data');
 Route::get('/reports/operations/export/{format}', [OperationsReportExportController::class, 'export'])
     ->whereIn('format', ['csv', 'xlsx', 'pdf'])
     ->middleware(['auth', 'permission:reports.export'])
@@ -117,5 +147,6 @@ Route::post('/archive/{jobId}/restore', [IncidentArchiveController::class, 'rest
 foreach (['stations', 'wards', 'roles', 'vehicles', 'teams', 'jobs'] as $catalog) {
     Route::get('/'.$catalog, [PageController::class, 'catalog'])
         ->defaults('kind', $catalog)
+        ->middleware('auth')
         ->name('app.'.$catalog);
 }

@@ -7,6 +7,8 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\VehicleStatusWorkflow;
+use App\Services\VehicleTrackingWorkflow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -18,8 +20,12 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
-    public function store(LoginRequest $request, AuditLogger $auditLogger): JsonResponse
-    {
+    public function store(
+        LoginRequest $request,
+        AuditLogger $auditLogger,
+        VehicleStatusWorkflow $statusWorkflow,
+        VehicleTrackingWorkflow $trackingWorkflow,
+    ): JsonResponse {
         $credentials = $request->validated();
         $user = User::query()->where('email', $credentials['email'])->first();
 
@@ -29,7 +35,20 @@ class AuthController extends Controller
             ]);
         }
 
-        $newToken = DB::transaction(function () use ($user, $credentials, $auditLogger): NewAccessToken {
+        $gpsData = array_intersect_key($credentials, array_flip([
+            'latitude',
+            'longitude',
+            'speed_kph',
+            'recorded_at',
+        ]));
+        $newToken = DB::transaction(function () use (
+            $user,
+            $credentials,
+            $gpsData,
+            $auditLogger,
+            $statusWorkflow,
+            $trackingWorkflow,
+        ): NewAccessToken {
             $user = User::query()->lockForUpdate()->find($user->getKey());
 
             if (! $user || ! $user->is_active || ! Hash::check($credentials['password'], $user->password)) {
@@ -42,14 +61,51 @@ class AuthController extends Controller
             $newToken = $user->createToken($credentials['device_name'] ?? 'emergency-dispatch-client');
             $auditLogger->record($user, 'auth.login', $user);
 
+            if (isset($gpsData['latitude'], $gpsData['longitude'])) {
+                if (! $user->hasRole('VEHICLE_DRIVER')) {
+                    throw ValidationException::withMessages([
+                        'latitude' => 'Only vehicle driver accounts can submit a vehicle location at login.',
+                    ]);
+                }
+
+                $vehicle = $statusWorkflow->findDriverLinkedVehicle($user, true);
+                if (! $vehicle) {
+                    throw ValidationException::withMessages([
+                        'latitude' => 'No vehicle is linked to this driver account.',
+                    ]);
+                }
+
+                $trackingWorkflow->recordLocation($user, $vehicle, $gpsData);
+            }
+
             return $newToken;
         });
+
+        $user = $user->refresh()->load('roles.permissions');
+        $vehicle = $user->hasRole('VEHICLE_DRIVER')
+            ? $statusWorkflow->findDriverLinkedVehicle($user)?->load('latestGpsLog')
+            : null;
+        $gpsLog = $vehicle?->latestGpsLog;
 
         return response()->json([
             'data' => [
                 'token' => $newToken->plainTextToken,
                 'token_type' => 'Bearer',
-                'user' => UserResource::make($user->refresh()->load('roles.permissions'))->resolve($request),
+                'user' => UserResource::make($user)->resolve($request),
+                'vehicle' => $vehicle ? [
+                    'id' => (int) $vehicle->id,
+                    'vehicle_number' => $vehicle->vehicle_number,
+                    'operational_status' => $vehicle->operational_status,
+                    'location' => [
+                        'latitude' => $gpsLog?->latitude === null
+                            ? ($vehicle->latitude === null ? null : (float) $vehicle->latitude)
+                            : (float) $gpsLog->latitude,
+                        'longitude' => $gpsLog?->longitude === null
+                            ? ($vehicle->longitude === null ? null : (float) $vehicle->longitude)
+                            : (float) $gpsLog->longitude,
+                        'recorded_at' => $gpsLog?->recorded_at?->toIso8601String(),
+                    ],
+                ] : null,
             ],
         ]);
     }
@@ -63,12 +119,17 @@ class AuthController extends Controller
         ]));
     }
 
-    public function destroy(Request $request, AuditLogger $auditLogger): Response
-    {
+    public function destroy(
+        Request $request,
+        AuditLogger $auditLogger,
+        VehicleStatusWorkflow $statusWorkflow,
+    ): Response {
         $user = $request->user();
         $token = $user->currentAccessToken();
 
-        DB::transaction(function () use ($user, $token, $auditLogger): void {
+        DB::transaction(function () use ($user, $token, $auditLogger, $statusWorkflow): void {
+            $statusWorkflow->markLinkedVehicleOffRoadOnLogout($user);
+
             if ($token instanceof PersonalAccessToken) {
                 $token->delete();
             }

@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CatalogMutationController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\DriverAssignmentController;
 use App\Http\Controllers\Api\V1\FleetController;
 use App\Http\Controllers\Api\V1\IncidentArchiveController;
 use App\Http\Controllers\Api\V1\IncidentController;
 use App\Http\Controllers\Api\V1\OperationsReportController;
+use App\Http\Controllers\Api\V1\VehicleOperationalStatusController;
 use App\Http\Controllers\Api\V1\VehicleTrackingController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,11 +21,24 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'show']);
         Route::post('/auth/logout', [AuthController::class, 'destroy']);
 
+        Route::get('/fleet/dashboard', [FleetController::class, 'assignments']);
         Route::get('/fleet/assignments', [FleetController::class, 'assignments']);
         Route::get('/fleet/vehicles', [FleetController::class, 'vehicles']);
         Route::get('/fleet/notifications', [FleetController::class, 'notifications']);
         Route::patch('/fleet/notifications/{notificationId}/read', [FleetController::class, 'markNotificationRead'])
             ->whereUuid('notificationId');
+
+        Route::prefix('driver/assignments')->controller(DriverAssignmentController::class)->group(function (): void {
+            Route::get('/active', 'active');
+            Route::post('/{assignment}/attend', 'attend');
+            Route::post('/{assignment}/decline', 'decline');
+            Route::post('/{assignment}/escalate', 'escalate');
+            Route::post('/{assignment}/need-help', 'needHelp');
+            Route::post('/{assignment}/reached', 'reached');
+            Route::post('/{assignment}/report-issues', 'reportIssues');
+            Route::post('/{assignment}/complete', 'complete');
+            Route::post('/{assignment}/close', 'close');
+        });
 
         Route::get('/dashboard', DashboardController::class)
             ->middleware('permission:dashboard.view');
@@ -53,6 +68,10 @@ Route::prefix('v1')->group(function (): void {
             ->whereNumber('id')
             ->whereNumber('assignmentId')
             ->middleware('permission:jobs.update_status');
+        Route::post('/jobs/{id}/assignments/{assignmentId}/status', [IncidentController::class, 'updateAssignmentStatus'])
+            ->whereNumber('id')
+            ->whereNumber('assignmentId')
+            ->middleware('permission:jobs.update_status');
         Route::get('/tracking', [VehicleTrackingController::class, 'index'])
             ->middleware('permission:gps.view');
         Route::get('/reports/operations', OperationsReportController::class)
@@ -63,6 +82,8 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/vehicles/{vehicle}/gps', [VehicleTrackingController::class, 'store'])
             ->whereNumber('vehicle')
             ->middleware(['permission:gps.update', 'throttle:120,1']);
+        Route::patch('/vehicles/{vehicle}/operational-status', [VehicleOperationalStatusController::class, 'update'])
+            ->whereNumber('vehicle');
 
         Route::middleware('permission:stations.view')->get('/fire-stations', [CatalogController::class, 'fireStations']);
         Route::middleware('permission:wards.view')->get('/wards', [CatalogController::class, 'wards']);

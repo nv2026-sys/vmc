@@ -14,7 +14,10 @@ use Illuminate\Validation\ValidationException;
 
 class VehicleTrackingWorkflow
 {
-    public function __construct(private readonly AuditLogger $auditLogger) {}
+    public function __construct(
+        private readonly AuditLogger $auditLogger,
+        private readonly VehicleStatusWorkflow $statusWorkflow,
+    ) {}
 
     public function trackedVehicles(User $actor): Collection
     {
@@ -25,15 +28,18 @@ class VehicleTrackingWorkflow
                 'latestGpsLog',
                 'assignments' => function ($assignments) use ($actor): void {
                     $assignments->whereNull('released_at')
-                        ->with('emergencyJob:id,job_id,incident_type,priority');
+                        ->latest('assigned_at')
+                        ->with([
+                            'emergencyJob.ward:id,name',
+                            'statusHistory' => fn ($history) => $history
+                                ->whereIn('new_status', [
+                                    JobAssignment::STATUS_ARRIVED,
+                                    JobAssignment::STATUS_IN_PROGRESS,
+                                ])
+                                ->orderBy('changed_at'),
+                        ]);
                     if ($this->isDriverRestricted($actor)) {
-                        $assignments->where(function (Builder $membership) use ($actor): void {
-                            $membership->where('team_leader_user_id', $actor->id)
-                                ->orWhereHas('team.members', function (Builder $members) use ($actor): void {
-                                    $members->where('users.id', $actor->id)
-                                        ->whereNull('team_members.left_at');
-                                });
-                        });
+                        $assignments->where('assigned_driver_user_id', $actor->id);
                     }
                 },
             ])
@@ -65,7 +71,10 @@ class VehicleTrackingWorkflow
 
         if ($this->isDriverRestricted($actor)) {
             $assignmentIds = $this->driverAssignments($actor, $vehicle)->pluck('id');
-            $query->whereIn('job_assignment_id', $assignmentIds);
+            $query->where(function ($logs) use ($assignmentIds, $actor): void {
+                $logs->whereIn('job_assignment_id', $assignmentIds)
+                    ->orWhere('received_by', $actor->id);
+            });
         }
 
         if (! empty($filters['assignment_id'])) {
@@ -95,15 +104,33 @@ class VehicleTrackingWorkflow
     {
         return DB::transaction(function () use ($actor, $vehicle, $data): VehicleGpsLog {
             $vehicle = $this->visibleVehicles($actor)->lockForUpdate()->findOrFail($vehicle->id);
-            $assignment = $vehicle->assignments()
-                ->whereKey($data['assignment_id'])
-                ->whereNull('released_at')
-                ->lockForUpdate()
-                ->first();
+            if ($this->isDriverRestricted($actor)) {
+                $linkedVehicle = $this->statusWorkflow->findDriverLinkedVehicle($actor, true);
+                abort_unless($linkedVehicle && (int) $linkedVehicle->id === (int) $vehicle->id, 404);
+                if ($vehicle->operational_status !== Vehicle::OPERATIONAL_STATUS_ON_ROAD) {
+                    throw ValidationException::withMessages([
+                        'status' => 'The assigned vehicle must be On Road to submit GPS updates.',
+                    ]);
+                }
+            }
 
-            if (! $assignment || ! $this->canSubmitForAssignment($actor, $assignment)) {
+            $assignment = null;
+            if (! empty($data['assignment_id'])) {
+                $assignment = $vehicle->assignments()
+                    ->whereKey($data['assignment_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $assignment || ! $this->canSubmitForAssignment($actor, $assignment)) {
+                    throw ValidationException::withMessages([
+                        'assignment_id' => 'The assignment must belong to this vehicle and your driver account.',
+                    ]);
+                }
+            } elseif (! $actor->hasRole('VEHICLE_DRIVER')
+                && ! $actor->hasRole('SUPER_ADMIN')
+                && ! $actor->hasRole('CONTROL_ROOM_ADMIN')) {
                 throw ValidationException::withMessages([
-                    'assignment_id' => 'An active assignment for this vehicle and your driver team is required.',
+                    'assignment_id' => 'A valid assignment is required for this account.',
                 ]);
             }
 
@@ -116,7 +143,7 @@ class VehicleTrackingWorkflow
             }
 
             $log = $vehicle->gpsLogs()->create([
-                'job_assignment_id' => $assignment->id,
+                'job_assignment_id' => $assignment?->id,
                 'received_by' => $actor->id,
                 'latitude' => $data['latitude'],
                 'longitude' => $data['longitude'],
@@ -131,7 +158,7 @@ class VehicleTrackingWorkflow
 
             $this->auditLogger->record($actor, 'vehicles.gps_recorded', $log, [
                 'vehicle_id' => $vehicle->id,
-                'assignment_id' => $assignment->id,
+                'assignment_id' => $assignment?->id,
             ]);
 
             return $log->load('vehicle:id,vehicle_number', 'assignment:id,emergency_job_id');
@@ -148,15 +175,7 @@ class VehicleTrackingWorkflow
             return false;
         }
 
-        $team = $assignment->team;
-
-        return $team !== null && (
-            $team->leader_user_id === $actor->id
-            || $team->members()
-                ->where('users.id', $actor->id)
-                ->whereNull('team_members.left_at')
-                ->exists()
-        );
+        return (int) $assignment->assigned_driver_user_id === (int) $actor->getKey();
     }
 
     private function visibleVehicles(User $actor): Builder
@@ -168,13 +187,7 @@ class VehicleTrackingWorkflow
 
         if ($this->isDriverRestricted($actor)) {
             $vehicles->whereHas('assignments', function (Builder $assignments) use ($actor): void {
-                $assignments->where(function (Builder $membership) use ($actor): void {
-                    $membership->where('team_leader_user_id', $actor->id)
-                        ->orWhereHas('team.members', function (Builder $members) use ($actor): void {
-                            $members->where('users.id', $actor->id)
-                                ->whereNull('team_members.left_at');
-                        });
-                });
+                $assignments->where('assigned_driver_user_id', $actor->id);
             });
         } else {
             $stationIds = $actor->fireStations()->pluck('fire_stations.id')
@@ -190,14 +203,8 @@ class VehicleTrackingWorkflow
     private function driverAssignments(User $actor, Vehicle $vehicle): Collection
     {
         return $vehicle->assignments()
-            ->where(function (Builder $assignments) use ($actor): void {
-                $assignments->where('team_leader_user_id', $actor->id)
-                    ->orWhereHas('team.members', function (Builder $members) use ($actor): void {
-                        $members->where('users.id', $actor->id)
-                            ->whereNull('team_members.left_at');
-                    });
-            })
-            ->get(['id', 'vehicle_id', 'team_id', 'team_leader_user_id']);
+            ->where('assigned_driver_user_id', $actor->id)
+            ->get(['id', 'vehicle_id', 'team_id', 'team_leader_user_id', 'assigned_driver_user_id']);
     }
 
     private function isDriverRestricted(User $actor): bool

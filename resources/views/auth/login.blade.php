@@ -7,13 +7,13 @@
     <link rel="stylesheet" href="{{ asset('css/dispatch.css') }}">
     <link rel="stylesheet" href="{{ asset('css/dashboard.css') }}">
     <link rel="stylesheet" href="{{ asset('css/operations-theme.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/accessibility-typography.css') }}?v={{ filemtime(public_path('css/accessibility-typography.css')) }}">
 </head>
 <body class="login-body">
 <main class="login-layout">
     <section class="login-story">
         <a class="brand brand-light" href="{{ route('dashboard') }}">
-            <span class="brand-mark">VMC</span>
-            <span><strong>Vadodara</strong><small>EMERGENCY RESPONSE</small></span>
+            <img class="brand-logo" src="{{ asset('images/vadodara-municipal-corporation-logo.jpeg') }}" alt="Vadodara Municipal Corporation">
         </a>
         <div class="story-copy">
             <span class="story-kicker"><span class="online-dot"></span> FIRE &amp; AMBULANCE DISPATCH</span>

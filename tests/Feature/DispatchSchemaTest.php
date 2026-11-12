@@ -6,6 +6,7 @@ use App\Models\EmergencyJob;
 use App\Models\FireStation;
 use App\Models\JobAssignment;
 use App\Models\Team;
+use App\Models\User;
 use App\Models\Vehicle;
 use Database\Seeders\DemoDispatchSeeder;
 use Database\Seeders\RbacSeeder;
@@ -43,10 +44,10 @@ class DispatchSchemaTest extends TestCase
         $this->assertDatabaseCount('vehicles', 2);
         $this->assertDatabaseCount('teams', 2);
         $this->assertDatabaseCount('team_members', 2);
-        $this->assertDatabaseCount('emergency_jobs', 3);
-        $this->assertDatabaseCount('job_call_logs', 3);
+        $this->assertDatabaseCount('emergency_jobs', 5);
+        $this->assertDatabaseCount('job_call_logs', 5);
         $this->assertDatabaseCount('job_assignments', 1);
-        $this->assertDatabaseCount('job_status_history', 6);
+        $this->assertDatabaseCount('job_status_history', 8);
         $this->assertDatabaseCount('job_remarks', 1);
         $this->assertDatabaseCount('vehicle_gps_logs', 1);
         $this->assertDatabaseCount('job_external_references', 1);
@@ -88,6 +89,14 @@ class DispatchSchemaTest extends TestCase
             'emergency_job_id' => $transferredJob->id,
             'reference_number' => 'DEMO-112-0003',
         ]);
+        $yesterdayJob = EmergencyJob::query()->where('job_id', 'VMC-DEMO-0004')->firstOrFail();
+        $this->assertTrue(
+            $yesterdayJob->occurred_at->between(now()->subDay()->subMinute(), now()->subDay()->addMinute()),
+        );
+        $twoDaysAgoJob = EmergencyJob::query()->where('job_id', 'VMC-DEMO-0005')->firstOrFail();
+        $this->assertTrue(
+            $twoDaysAgoJob->occurred_at->between(now()->subDays(2)->subMinute(), now()->subDays(2)->addMinute()),
+        );
         $this->assertSame(
             1,
             FireStation::query()->where('code', 'DEMO-CENTRAL')->firstOrFail()->vehicles()->count(),
@@ -100,6 +109,13 @@ class DispatchSchemaTest extends TestCase
             '10 Station Road, Vadodara',
             FireStation::query()->where('code', 'DEMO-CENTRAL')->value('address'),
         );
+        $northDispatcher = User::query()->where('email', 'north.dispatch@example.test')->firstOrFail();
+        $this->actingAs($northDispatcher)
+            ->get(route('app.jobs.show', $yesterdayJob))
+            ->assertOk()
+            ->assertSee('Assign one or more units')
+            ->assertSee('Demo North Vehicle Driver')
+            ->assertSee('DEMO-RESCUE-01');
         $this->assertSame(1, Vehicle::query()->where('status', Vehicle::STATUS_DEPLOYED)->count());
         $this->assertSame(2, Team::query()->count());
         $this->assertSame(1, JobAssignment::query()->where('status', EmergencyJob::STATUS_EN_ROUTE)->count());

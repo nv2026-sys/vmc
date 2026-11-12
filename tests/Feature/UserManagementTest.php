@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\AuditLog;
 use App\Models\FireStation;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\DemoDispatchSeeder;
 use Database\Seeders\RbacSeeder;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -36,6 +39,29 @@ class UserManagementTest extends TestCase
             ->assertSee('+ Add user')
             ->assertSee($staff->name)
             ->assertSee(route('users.edit', $staff));
+    }
+
+    public function test_user_directory_keeps_query_count_bounded_as_accounts_grow(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::query()->where('code', 'CONTROL_ROOM_ADMIN')->value('id'));
+        $dispatcherRoleId = Role::query()->where('code', 'DISPATCH_OPERATOR')->value('id');
+
+        foreach (range(1, 15) as $index) {
+            $user = User::factory()->create(['name' => 'Directory User '.$index]);
+            $user->roles()->attach($dispatcherRoleId);
+        }
+
+        $queryCount = 0;
+        DB::listen(function (QueryExecuted $query) use (&$queryCount): void {
+            $queryCount++;
+        });
+
+        $this->actingAs($admin)
+            ->get(route('users.index'))
+            ->assertOk();
+
+        $this->assertLessThan(50, $queryCount);
     }
 
     public function test_station_admin_can_create_and_deactivate_only_lower_level_users_in_assigned_stations(): void
@@ -89,6 +115,28 @@ class UserManagementTest extends TestCase
 
         $this->assertFalse($managedUser->fresh()->is_active);
         $this->assertSame(0, $managedUser->tokens()->count());
+    }
+
+    public function test_legacy_control_room_role_can_see_assignable_roles(): void
+    {
+        $controlRoom = User::factory()->create();
+        $legacyRole = Role::query()->create([
+            'code' => 'CONTROL_ROOM',
+            'name' => 'Control Room Operator',
+            'is_system' => true,
+        ]);
+        $controlRoom->roles()->attach($legacyRole);
+        $legacyRole->permissions()->attach(
+            Permission::query()->where('code', 'users.manage')->value('id'),
+        );
+
+        $this->actingAs($controlRoom)
+            ->get('/users/create')
+            ->assertOk()
+            ->assertSee('name="role_code"', false)
+            ->assertSee('Station Admin')
+            ->assertSee('Vehicle Driver')
+            ->assertDontSee('Super Admin');
     }
 
     public function test_station_admin_cannot_assign_admin_role_or_manage_another_station_user(): void
@@ -188,7 +236,7 @@ class UserManagementTest extends TestCase
 
         $this->assertDatabaseCount('fire_stations', 2);
         $this->assertDatabaseCount('wards', 4);
-        $this->assertSame(8, User::query()->where('email', 'like', '%@example.test')->count());
+        $this->assertSame(9, User::query()->where('email', 'like', '%@example.test')->count());
         $this->assertSame('CONTROL_ROOM_ADMIN', User::query()
             ->where('email', 'control.room@example.test')
             ->firstOrFail()

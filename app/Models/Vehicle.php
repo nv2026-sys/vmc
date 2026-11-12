@@ -18,6 +18,10 @@ class Vehicle extends Model
 
     public const STATUS_MAINTENANCE = 'MAINTENANCE';
 
+    public const OPERATIONAL_STATUS_ON_ROAD = 'ON_ROAD';
+
+    public const OPERATIONAL_STATUS_OFF_ROAD = 'OFF_ROAD';
+
     protected $fillable = [
         'fire_station_id',
         'vehicle_number',
@@ -27,6 +31,7 @@ class Vehicle extends Model
         'latitude',
         'longitude',
         'status',
+        'operational_status',
         'last_service_at',
     ];
 
@@ -52,6 +57,11 @@ class Vehicle extends Model
     public function gpsLogs(): HasMany
     {
         return $this->hasMany(VehicleGpsLog::class);
+    }
+
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(VehicleStatusHistory::class, 'vehicle_id');
     }
 
     public function latestGpsLog(): HasOne

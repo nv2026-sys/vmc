@@ -13,9 +13,11 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Ward;
 use App\Notifications\DispatchAssigned;
+use App\Notifications\JobAssignmentAlert;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -74,6 +76,13 @@ class IncidentWorkflow
 
     private function scopeJobsToActor(Builder $jobs, User $actor): Builder
     {
+        if ($actor->hasRole('VEHICLE_DRIVER')) {
+            return $jobs->whereHas('assignments', function (Builder $assignments) use ($actor): void {
+                $assignments->whereNull('released_at')
+                    ->where('assigned_driver_user_id', $actor->id);
+            });
+        }
+
         if (! $this->canViewAllStations($actor)) {
             $stationIds = $this->stationIds($actor);
             $jobs->where(function (Builder $query) use ($stationIds): void {
@@ -154,18 +163,24 @@ class IncidentWorkflow
             )
             ->with([
                 'vehicles' => fn (Builder|Relation $vehicles) => $vehicles
-                    ->where('status', Vehicle::STATUS_AVAILABLE)
-                    ->whereDoesntHave('assignments', fn (Builder $assignments) => $assignments->whereNull('released_at'))
+                    ->whereIn('status', [Vehicle::STATUS_AVAILABLE, Vehicle::STATUS_DEPLOYED])
+                    ->where('operational_status', Vehicle::OPERATIONAL_STATUS_ON_ROAD)
                     ->orderBy('vehicle_number'),
                 'teams' => fn (Builder|Relation $teams) => $teams
                     ->where('status', Team::STATUS_AVAILABLE)
                     ->whereDoesntHave('assignments', fn (Builder $assignments) => $assignments->whereNull('released_at'))
                     ->orderBy('name'),
+                'users' => fn (Builder|Relation $users) => $users
+                    ->where('users.is_active', true)
+                    ->whereHas('roles', fn (Builder $roles) => $roles->where('roles.code', 'VEHICLE_DRIVER'))
+                    ->orderBy('users.name')
+                    ->select('users.id', 'users.name'),
             ])
             ->orderBy('name')
             ->get();
 
-        return $stations->filter(fn (FireStation $station): bool => $station->vehicles->isNotEmpty());
+        return $stations->filter(fn (FireStation $station): bool => $station->vehicles->isNotEmpty()
+            && $station->users->isNotEmpty());
     }
 
     public function canUpdateAssignment(User $actor, JobAssignment $assignment): bool
@@ -175,15 +190,7 @@ class IncidentWorkflow
         }
 
         if ($actor->hasRole('VEHICLE_DRIVER')) {
-            $team = $assignment->team;
-
-            return $team !== null && (
-                $assignment->team_leader_user_id === $actor->id
-                || $team->members()
-                    ->where('users.id', $actor->id)
-                    ->whereNull('team_members.left_at')
-                    ->exists()
-            );
+            return (int) $assignment->assigned_driver_user_id === (int) $actor->getKey();
         }
 
         if ($this->stationIds($actor)->contains($assignment->fire_station_id)) {
@@ -193,7 +200,7 @@ class IncidentWorkflow
         $team = $assignment->team;
 
         return $team !== null && (
-            $team->leader_user_id === $actor->id
+            (int) $team->leader_user_id === (int) $actor->getKey()
             || $team->members()->where('users.id', $actor->id)->exists()
         );
     }
@@ -367,10 +374,36 @@ class IncidentWorkflow
                     ->lockForUpdate()
                     ->first();
 
-                if (! $vehicle || $vehicle->status !== Vehicle::STATUS_AVAILABLE
-                    || $vehicle->assignments()->whereNull('released_at')->exists()) {
+                if (! $vehicle
+                    || ! in_array($vehicle->status, [Vehicle::STATUS_AVAILABLE, Vehicle::STATUS_DEPLOYED], true)
+                    || $vehicle->operational_status !== Vehicle::OPERATIONAL_STATUS_ON_ROAD
+                    || $job->assignments()->where('vehicle_id', $vehicle->id)->whereNull('released_at')->exists()) {
                     throw ValidationException::withMessages([
-                        'assignments' => 'Each selected vehicle must be available at its selected station.',
+                        'assignments' => 'Each selected vehicle must be On Road and cannot already be assigned to this incident.',
+                    ]);
+                }
+
+                $driver = User::query()
+                    ->whereKey($resource['driver_user_id'])
+                    ->where('is_active', true)
+                    ->whereHas('roles', fn (Builder $roles) => $roles->where('roles.code', 'VEHICLE_DRIVER'))
+                    ->whereHas('fireStations', fn (Builder $stations) => $stations->whereKey($station->id))
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $driver) {
+                    throw ValidationException::withMessages([
+                        'assignments' => 'Select an active vehicle driver assigned to the selected station.',
+                    ]);
+                }
+
+                if (JobAssignment::query()
+                    ->where('assigned_driver_user_id', $driver->id)
+                    ->whereNull('released_at')
+                    ->where('vehicle_id', '!=', $vehicle->id)
+                    ->exists()) {
+                    throw ValidationException::withMessages([
+                        'assignments' => 'This driver already has an active assignment on another vehicle. Complete that assignment first, or assign the new incident to the same vehicle.',
                     ]);
                 }
 
@@ -396,6 +429,7 @@ class IncidentWorkflow
                     'vehicle_id' => $vehicle->id,
                     'team_id' => $team?->id,
                     'team_leader_user_id' => $team?->leader_user_id,
+                    'assigned_driver_user_id' => $driver->id,
                     'assigned_by' => $actor->id,
                     'assigned_at' => now(),
                     'status' => JobAssignment::STATUS_ASSIGNED,
@@ -416,32 +450,54 @@ class IncidentWorkflow
                     'job_id' => $job->job_id,
                     'vehicle_id' => $vehicle->id,
                     'team_id' => $team?->id,
+                    'driver_user_id' => $driver->id,
                     'fire_station_id' => $station->id,
                 ]);
 
+                $recipientIds = collect([$driver->id]);
                 if ($team) {
-                    $recipientIds = collect([$assignment->team_leader_user_id])
-                        ->merge($team->members()->whereNull('team_members.left_at')->pluck('users.id'))
-                        ->filter()
-                        ->unique();
-                    $dispatch = [
-                        'assignment_id' => $assignment->id,
+                    $recipientIds = $recipientIds
+                        ->merge([$assignment->team_leader_user_id])
+                        ->merge($team->members()->whereNull('team_members.left_at')->pluck('users.id'));
+                }
+                $dispatch = [
+                    'assignment_id' => $assignment->id,
+                    'incident_id' => $job->id,
+                    'job_id' => $job->job_id,
+                    'incident_type' => $job->incident_type,
+                    'priority' => $job->priority,
+                    'caller_name' => $job->caller_name,
+                    'caller_phone' => $job->caller_phone,
+                    'society_name' => $job->society_name,
+                    'incident_address' => $job->incident_address,
+                    'fire_station' => $station->name,
+                    'vehicle_number' => $vehicle->vehicle_number,
+                    'driver_user_id' => $driver->id,
+                    'message' => 'A new emergency response job has been assigned to your vehicle.',
+                    'assigned_at' => $assignment->assigned_at?->toIso8601String(),
+                ];
+
+                User::query()->whereKey($recipientIds->filter()->unique())->get()
+                    ->each(fn (User $recipient) => $recipient->notify(new DispatchAssigned($dispatch)));
+
+                $this->notifyAssignmentUsers(
+                    $assignment,
+                    $actor,
+                    [
+                        'event' => 'assignment.created',
+                        'assignment_id' => (int) $assignment->id,
+                        'incident_id' => (int) $job->id,
                         'job_id' => $job->job_id,
                         'incident_type' => $job->incident_type,
-                        'priority' => $job->priority,
-                        'caller_name' => $job->caller_name,
-                        'caller_phone' => $job->caller_phone,
-                        'society_name' => $job->society_name,
-                        'incident_address' => $job->incident_address,
-                        'fire_station' => $station->name,
                         'vehicle_number' => $vehicle->vehicle_number,
-                        'message' => 'A new emergency response job has been assigned to your team.',
+                        'team_name' => $team?->name,
+                        'station_name' => $station->name,
+                        'driver_name' => $driver->name,
+                        'message' => 'A response unit was assigned to this incident.',
                         'assigned_at' => $assignment->assigned_at?->toIso8601String(),
-                    ];
-
-                    User::query()->whereKey($recipientIds)->get()
-                        ->each(fn (User $recipient) => $recipient->notify(new DispatchAssigned($dispatch)));
-                }
+                    ],
+                    $recipientIds->filter()->unique()->all(),
+                );
             }
 
             if ($initialStatus !== EmergencyJob::STATUS_ASSIGNED) {
@@ -461,6 +517,7 @@ class IncidentWorkflow
                 'assignments.vehicle',
                 'assignments.team',
                 'assignments.teamLeader',
+                'assignments.assignedDriver',
                 'statusHistory.actor',
                 'statusHistory.assignment.vehicle',
             ]);
@@ -482,26 +539,18 @@ class IncidentWorkflow
                 throw ValidationException::withMessages(['assignment' => 'This assignment is outside your access scope.']);
             }
 
-            $allowedNext = [
-                JobAssignment::STATUS_ASSIGNED => JobAssignment::STATUS_EN_ROUTE,
-                JobAssignment::STATUS_EN_ROUTE => JobAssignment::STATUS_ARRIVED,
-                JobAssignment::STATUS_ARRIVED => JobAssignment::STATUS_IN_PROGRESS,
-                JobAssignment::STATUS_IN_PROGRESS => JobAssignment::STATUS_COMPLETED,
-            ];
             $previousAssignmentStatus = $assignment->status;
             $nextStatus = $data['status'];
-            if ($assignment->released_at !== null || ($allowedNext[$previousAssignmentStatus] ?? null) !== $nextStatus) {
-                throw ValidationException::withMessages([
-                    'status' => 'Invalid status transition. Follow assigned → en route → arrived → in progress → completed.',
-                ]);
-            }
-
             $previousJobStatus = $job->status;
             $assignment->update([
                 'status' => $nextStatus,
-                'released_at' => $nextStatus === JobAssignment::STATUS_COMPLETED ? now() : null,
+                'released_at' => $nextStatus === JobAssignment::STATUS_COMPLETED
+                    ? (isset($data['changed_at']) ? Carbon::parse($data['changed_at']) : now())
+                    : null,
                 'remarks' => $data['remarks'] ?? $assignment->remarks,
+                'cancellation_reason' => null,
             ]);
+            $changedAt = isset($data['changed_at']) ? Carbon::parse($data['changed_at']) : now();
             $this->recordStatus(
                 $job,
                 $previousAssignmentStatus,
@@ -511,25 +560,149 @@ class IncidentWorkflow
                 $assignment,
                 isset($data['latitude']) ? (float) $data['latitude'] : null,
                 isset($data['longitude']) ? (float) $data['longitude'] : null,
+                $changedAt,
             );
 
-            if ($nextStatus === JobAssignment::STATUS_COMPLETED) {
-                $assignment->vehicle()->update(['status' => Vehicle::STATUS_AVAILABLE]);
-                if ($team && ! $team->assignments()->whereNull('released_at')->exists()) {
-                    $team->update(['status' => Team::STATUS_AVAILABLE]);
-                }
+            $vehicle = $assignment->vehicle()->lockForUpdate()->firstOrFail();
+            $vehicle->update([
+                'status' => $vehicle->assignments()->whereNull('released_at')->exists()
+                    ? Vehicle::STATUS_DEPLOYED
+                    : Vehicle::STATUS_AVAILABLE,
+            ]);
+            if ($team) {
+                $team = $team->newQuery()->lockForUpdate()->findOrFail($team->id);
+                $team->update([
+                    'status' => $team->assignments()->whereNull('released_at')->exists()
+                        ? Team::STATUS_DEPLOYED
+                        : Team::STATUS_AVAILABLE,
+                ]);
             }
 
             $nextJobStatus = $this->aggregateJobStatus($job);
             if ($nextJobStatus !== $previousJobStatus) {
                 $job->update(['status' => $nextJobStatus]);
-                $this->recordStatus($job, $previousJobStatus, $nextJobStatus, $actor, $data['remarks'] ?? null);
+                $this->recordStatus(
+                    $job,
+                    $previousJobStatus,
+                    $nextJobStatus,
+                    $actor,
+                    $data['remarks'] ?? null,
+                    changedAt: $changedAt,
+                );
             }
 
             $this->auditLogger->record($actor, 'jobs.assignment_status_updated', $assignment, [
                 'job_id' => $job->job_id,
                 'previous_status' => $previousAssignmentStatus,
                 'new_status' => $nextStatus,
+            ]);
+            if ($previousAssignmentStatus !== $nextStatus) {
+                $this->notifyAssignmentUsers($assignment, $actor, [
+                    'event' => 'assignment.status_changed',
+                    'assignment_id' => (int) $assignment->id,
+                    'incident_id' => (int) $job->id,
+                    'job_id' => $job->job_id,
+                    'incident_type' => $job->incident_type,
+                    'vehicle_number' => $vehicle->vehicle_number,
+                    'team_name' => $team?->name,
+                    'station_name' => $assignment->fireStation?->name,
+                    'driver_name' => $assignment->assignedDriver?->name,
+                    'previous_status' => $previousAssignmentStatus,
+                    'new_status' => $nextStatus,
+                    'changed_by' => $actor->name,
+                    'message' => sprintf(
+                        '%s changed the assignment status from %s to %s.',
+                        $actor->name,
+                        str_replace('_', ' ', strtolower($previousAssignmentStatus)),
+                        str_replace('_', ' ', strtolower($nextStatus)),
+                    ),
+                    'changed_at' => $changedAt->toIso8601String(),
+                ]);
+            }
+
+            return $job->load([
+                'ward',
+                'assignments.fireStation',
+                'assignments.vehicle',
+                'assignments.team',
+                'assignments.teamLeader',
+                'assignments.assignedDriver',
+                'statusHistory.actor',
+                'statusHistory.assignment.vehicle',
+            ]);
+        });
+    }
+
+    public function declineAssignment(User $actor, JobAssignment $requestedAssignment, string $reason): EmergencyJob
+    {
+        return DB::transaction(function () use ($actor, $requestedAssignment, $reason): EmergencyJob {
+            $job = EmergencyJob::query()->lockForUpdate()->findOrFail($requestedAssignment->emergency_job_id);
+            $assignment = $job->assignments()->lockForUpdate()->findOrFail($requestedAssignment->id);
+
+            if (! $this->canUpdateAssignment($actor, $assignment)) {
+                throw ValidationException::withMessages([
+                    'assignment' => 'This assignment is outside your access scope.',
+                ]);
+            }
+
+            if ($assignment->released_at !== null || $assignment->status !== JobAssignment::STATUS_ASSIGNED) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a pending assignment can be declined.',
+                ]);
+            }
+
+            $previousJobStatus = $job->status;
+            $assignment->update([
+                'status' => JobAssignment::STATUS_DECLINED,
+                'released_at' => now(),
+                'cancellation_reason' => $reason,
+            ]);
+            $this->recordStatus(
+                $job,
+                JobAssignment::STATUS_ASSIGNED,
+                JobAssignment::STATUS_DECLINED,
+                $actor,
+                $reason,
+                $assignment,
+            );
+
+            $vehicle = $assignment->vehicle()->lockForUpdate()->firstOrFail();
+            $vehicle->update([
+                'status' => $vehicle->assignments()->whereNull('released_at')->exists()
+                    ? Vehicle::STATUS_DEPLOYED
+                    : Vehicle::STATUS_AVAILABLE,
+            ]);
+
+            $team = $assignment->team;
+            if ($team && ! $team->assignments()->whereNull('released_at')->exists()) {
+                $team->update(['status' => Team::STATUS_AVAILABLE]);
+            }
+
+            $nextJobStatus = $this->aggregateJobStatus($job);
+            if ($nextJobStatus !== $previousJobStatus) {
+                $job->update(['status' => $nextJobStatus]);
+                $this->recordStatus($job, $previousJobStatus, $nextJobStatus, $actor, $reason);
+            }
+
+            $this->auditLogger->record($actor, 'jobs.assignment_declined', $assignment, [
+                'job_id' => $job->job_id,
+                'reason' => $reason,
+            ]);
+            $this->notifyAssignmentUsers($assignment, $actor, [
+                'event' => 'assignment.status_changed',
+                'assignment_id' => (int) $assignment->id,
+                'incident_id' => (int) $job->id,
+                'job_id' => $job->job_id,
+                'incident_type' => $job->incident_type,
+                'vehicle_number' => $assignment->vehicle?->vehicle_number,
+                'team_name' => $team?->name,
+                'station_name' => $assignment->fireStation?->name,
+                'driver_name' => $assignment->assignedDriver?->name,
+                'previous_status' => JobAssignment::STATUS_ASSIGNED,
+                'new_status' => JobAssignment::STATUS_DECLINED,
+                'changed_by' => $actor->name,
+                'message' => $actor->name.' declined the assigned response unit: '.$reason,
+                'changed_at' => now()->toIso8601String(),
             ]);
 
             return $job->load([
@@ -538,6 +711,7 @@ class IncidentWorkflow
                 'assignments.vehicle',
                 'assignments.team',
                 'assignments.teamLeader',
+                'assignments.assignedDriver',
                 'statusHistory.actor',
                 'statusHistory.assignment.vehicle',
             ]);
@@ -546,9 +720,21 @@ class IncidentWorkflow
 
     private function aggregateJobStatus(EmergencyJob $job): string
     {
-        $statuses = $job->assignments()->pluck('status');
-        if ($statuses->isNotEmpty()
-            && $statuses->every(fn (string $status): bool => $status === JobAssignment::STATUS_COMPLETED)) {
+        $assignments = $job->assignments()->get(['status', 'released_at']);
+        $activeStatuses = $assignments
+            ->whereNull('released_at')
+            ->pluck('status');
+
+        if ($activeStatuses->isEmpty()) {
+            return $assignments->contains(
+                fn (JobAssignment $assignment): bool => $assignment->status === JobAssignment::STATUS_COMPLETED,
+            )
+                ? EmergencyJob::STATUS_COMPLETED
+                : EmergencyJob::STATUS_RECEIVED;
+        }
+
+        $statuses = $activeStatuses;
+        if ($activeStatuses->every(fn (string $status): bool => $status === JobAssignment::STATUS_COMPLETED)) {
             return EmergencyJob::STATUS_COMPLETED;
         }
 
@@ -564,7 +750,72 @@ class IncidentWorkflow
             ->sortByDesc(fn (string $value): int => $rank[$value] ?? 0)
             ->first();
 
-        return $status ?? EmergencyJob::STATUS_RECEIVED;
+        return match ($status) {
+            JobAssignment::STATUS_ASSIGNED => EmergencyJob::STATUS_ASSIGNED,
+            JobAssignment::STATUS_EN_ROUTE => EmergencyJob::STATUS_EN_ROUTE,
+            JobAssignment::STATUS_ARRIVED => EmergencyJob::STATUS_ARRIVED,
+            JobAssignment::STATUS_IN_PROGRESS => EmergencyJob::STATUS_IN_PROGRESS,
+            default => EmergencyJob::STATUS_RECEIVED,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  list<int>  $excludedUserIds
+     */
+    private function notifyAssignmentUsers(
+        JobAssignment $assignment,
+        User $actor,
+        array $data,
+        array $excludedUserIds = [],
+    ): void {
+        $stationId = (int) $assignment->fire_station_id;
+        $participantIds = collect([
+            $assignment->assigned_driver_user_id,
+            $assignment->team_leader_user_id,
+            $assignment->assigned_by,
+        ])->merge(
+            $assignment->team?->members()
+                ->whereNull('team_members.left_at')
+                ->pluck('users.id') ?? collect(),
+        )
+            ->filter()
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->reject(fn (int $id): bool => in_array($id, $excludedUserIds, true))
+            ->reject(fn (int $id): bool => $id === (int) $actor->id)
+            ->values();
+
+        User::query()
+            ->where('is_active', true)
+            ->whereKeyNot($actor->id)
+            ->when(
+                $excludedUserIds !== [],
+                fn (Builder $users) => $users->whereNotIn('users.id', $excludedUserIds),
+            )
+            ->where(function (Builder $users) use ($stationId, $participantIds): void {
+                $stationRecipients = function (Builder $scoped) use ($stationId): void {
+                    $scoped->whereHas('roles', fn (Builder $roles) => $roles
+                        ->whereHas('permissions', fn (Builder $permissions) => $permissions
+                            ->where('permissions.code', 'dashboard.view')))
+                        ->whereHas('roles', fn (Builder $roles) => $roles
+                            ->whereHas('permissions', fn (Builder $permissions) => $permissions
+                                ->where('permissions.code', 'jobs.view')))
+                        ->where(fn (Builder $authorized) => $authorized
+                            ->whereHas('roles', fn (Builder $roles) => $roles
+                                ->whereIn('roles.code', ['SUPER_ADMIN', 'CONTROL_ROOM_ADMIN']))
+                            ->orWhereHas('fireStations', fn (Builder $stations) => $stations
+                                ->whereKey($stationId))
+                            ->orWhereHas('managedFireStations', fn (Builder $stations) => $stations
+                                ->whereKey($stationId)));
+                };
+                $users->where($stationRecipients);
+                if ($participantIds->isNotEmpty()) {
+                    $users->orWhereIn('users.id', $participantIds);
+                }
+            })
+            ->get()
+            ->each(fn (User $recipient) => $recipient->notify(new JobAssignmentAlert($data)));
     }
 
     private function recordStatus(
@@ -576,6 +827,7 @@ class IncidentWorkflow
         ?JobAssignment $assignment = null,
         ?float $latitude = null,
         ?float $longitude = null,
+        ?Carbon $changedAt = null,
     ): void {
         JobStatusHistory::query()->create([
             'emergency_job_id' => $job->id,
@@ -583,7 +835,7 @@ class IncidentWorkflow
             'previous_status' => $previous,
             'new_status' => $next,
             'changed_by' => $actor->id,
-            'changed_at' => now(),
+            'changed_at' => $changedAt ?? now(),
             'remarks' => $remarks,
             'latitude' => $latitude,
             'longitude' => $longitude,
@@ -615,6 +867,10 @@ class IncidentWorkflow
     private function normalizedPhoneSql(): string
     {
         $digits = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(caller_phone, '+', ''), '-', ''), ' ', ''), '(', ''), ')', ''), '.', ''), '/', '')";
+
+        if (DB::connection()->getDriverName() === 'sqlsrv') {
+            return "CASE WHEN LEN({$digits}) = 12 AND SUBSTRING({$digits}, 1, 2) = '91' THEN SUBSTRING({$digits}, 3, 32) WHEN LEN({$digits}) = 11 AND SUBSTRING({$digits}, 1, 1) = '0' THEN SUBSTRING({$digits}, 2, 32) ELSE {$digits} END";
+        }
 
         return "CASE WHEN LENGTH({$digits}) = 12 AND SUBSTR({$digits}, 1, 2) = '91' THEN SUBSTR({$digits}, 3) WHEN LENGTH({$digits}) = 11 AND SUBSTR({$digits}, 1, 1) = '0' THEN SUBSTR({$digits}, 2) ELSE {$digits} END";
     }

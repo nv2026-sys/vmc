@@ -10,7 +10,7 @@ class EmergencyJobResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
+            'id' => (int) $this->id,
             'job_id' => $this->job_id,
             'caller_name' => $this->caller_name,
             'caller_phone' => $this->caller_phone,
@@ -19,7 +19,7 @@ class EmergencyJobResource extends JsonResource
             'priority' => $this->priority,
             'occurred_at' => $this->occurred_at?->toIso8601String(),
             'ward' => $this->whenLoaded('ward', fn (): ?array => $this->ward ? [
-                'id' => $this->ward->id,
+                'id' => (int) $this->ward->id,
                 'code' => $this->ward->code,
                 'name' => $this->ward->name,
             ] : null),

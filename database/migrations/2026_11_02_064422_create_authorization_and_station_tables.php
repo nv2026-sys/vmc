@@ -39,7 +39,8 @@ return new class extends Migration
         Schema::create('user_roles', function (Blueprint $table) {
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('role_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('assigned_by')->nullable()->constrained('users')->nullOnDelete();
+            // Keep this reference non-cascading to avoid a second cascade path from users.
+            $table->foreignId('assigned_by')->nullable()->constrained('users');
             $table->timestampsTz();
             $table->primary(['user_id', 'role_id']);
             $table->index(['role_id', 'user_id']);
@@ -80,7 +81,8 @@ return new class extends Migration
         Schema::create('user_fire_stations', function (Blueprint $table) {
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('fire_station_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('assigned_by')->nullable()->constrained('users')->nullOnDelete();
+            // Keep this reference non-cascading to avoid a second cascade path from users.
+            $table->foreignId('assigned_by')->nullable()->constrained('users');
             $table->timestampsTz();
             $table->primary(['user_id', 'fire_station_id']);
             $table->index(['fire_station_id', 'user_id']);

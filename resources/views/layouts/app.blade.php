@@ -11,12 +11,15 @@
     <link rel="stylesheet" href="{{ asset('css/dashboard-reference.css') }}">
     <link rel="stylesheet" href="{{ asset('css/master-data.css') }}">
     <link rel="stylesheet" href="{{ asset('css/tracking.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/vehicle-details.css') }}">
     <link rel="stylesheet" href="{{ asset('css/reports.css') }}">
     <link rel="stylesheet" href="{{ asset('css/dashboard-polish.css') }}?v={{ filemtime(public_path('css/dashboard-polish.css')) }}">
+    <link rel="stylesheet" href="{{ asset('css/accessibility-typography.css') }}?v={{ filemtime(public_path('css/accessibility-typography.css')) }}">
 </head>
 <body class="operations-dashboard-page {{ request()->routeIs('dashboard') ? 'operations-dashboard-layout' : '' }}">
 @php
     $currentUser = auth()->user();
+    $currentUser?->loadMissing('roles.permissions');
     $navigation = [
         ['section' => null, 'links' => [
             ['label' => 'Dashboard', 'route' => 'dashboard', 'permission' => 'dashboard.view', 'icon' => 'dashboard'],
@@ -69,13 +72,13 @@
     <symbol id="icon-report" viewBox="0 0 24 24"><path d="M4 20V4m0 16h17"/><path d="m7 15 4-4 3 2 6-7"/></symbol>
     <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2z"/></symbol>
     <symbol id="icon-roles" viewBox="0 0 24 24"><path d="m12 3 8 3v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="icon-notification" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
     <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
 </svg>
 <div class="shell">
     <aside class="sidebar" id="app-sidebar">
         <a class="brand" href="{{ route('dashboard') }}" aria-label="VMC Vadodara dashboard" title="VMC Vadodara dashboard">
-            <span class="brand-mark">VMC</span>
-            <span><strong>Vadodara</strong><small>EMERGENCY RESPONSE</small></span>
+            <img class="brand-logo" src="{{ asset('images/vadodara-municipal-corporation-logo.jpeg') }}" alt="Vadodara Municipal Corporation">
         </a>
         <div class="workspace">
             <span class="workspace-icon"><svg aria-hidden="true"><use href="#icon-pin"></use></svg></span>
@@ -139,7 +142,19 @@
                 <span class="app-alert-icon" aria-hidden="true">🚨</span>
                 <span><strong>Emergency Response System</strong><small>Ambulance &amp; Fire Brigade · Vadodara</small></span>
             </div>
+            <span class="current-page-title" aria-current="page">@yield('title', 'Dashboard')</span>
+            @if (request()->routeIs('dashboard') && $currentUser?->hasPermission('jobs.create'))
+                <a class="topbar-action" href="{{ route('app.jobs.new') }}"><span aria-hidden="true">＋</span> Add Incident</a>
+            @endif
             <div class="topbar-account">
+                @if ($currentUser)
+                    @php($unreadNotificationsCount = $currentUser->unreadNotifications()->count())
+                    <a class="button button-light button-small notification-link" href="{{ route('notifications.index') }}" aria-label="Notifications{{ $unreadNotificationsCount > 0 ? ', '.$unreadNotificationsCount.' unread' : '' }}">
+                        <svg aria-hidden="true"><use href="#icon-notification"></use></svg>
+                        <span>Notifications</span>
+                        <span class="notification-count" data-notification-count @if ($unreadNotificationsCount < 1) hidden @endif>{{ $unreadNotificationsCount > 99 ? '99+' : $unreadNotificationsCount }}</span>
+                    </a>
+                @endif
                 <span class="ops-live {{ app()->environment('local') ? 'is-demo' : '' }}"><span></span>{{ app()->environment('local') ? 'Demo data' : 'Live' }}</span>
                 <span class="topbar-date">{{ now()->format('D, d M Y H:i') }}</span>
                 @if ($currentUser)
@@ -156,6 +171,64 @@
         <footer class="footer"><strong>Responda Operations</strong><span>Secure emergency response management</span></footer>
     </div>
 </div>
+@if ($currentUser)
+    <div class="notification-toast" data-notification-toast role="status" aria-live="polite" hidden>
+        <strong data-notification-toast-title></strong>
+        <span data-notification-toast-message></span>
+        <a href="{{ route('notifications.index') }}">View notifications</a>
+    </div>
+    <script>
+        (() => {
+            const count = document.querySelector('[data-notification-count]');
+            const toast = document.querySelector('[data-notification-toast]');
+            const toastTitle = toast?.querySelector('[data-notification-toast-title]');
+            const toastMessage = toast?.querySelector('[data-notification-toast-message]');
+            if (!count || !toast || !toastTitle || !toastMessage) return;
+
+            let knownIds = null;
+            let toastTimeout;
+
+            const refreshNotifications = async () => {
+                try {
+                    const response = await fetch(@json(route('notifications.latest')), {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) {
+                        console.error('Unable to refresh notifications.', response.status);
+                        return;
+                    }
+                    const payload = await response.json();
+                    const unread = Number(payload.unread) || 0;
+                    count.textContent = unread > 99 ? '99+' : String(unread);
+                    count.hidden = unread === 0;
+
+                    const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+                    const currentIds = new Set(notifications.map((notification) => notification.id));
+                    if (knownIds !== null) {
+                        const newest = notifications.find((notification) => !knownIds.has(notification.id));
+                        if (newest) {
+                            const event = newest.event || '';
+                            toastTitle.textContent = event === 'dispatch.assigned' || event === 'assignment.created'
+                                ? 'New assignment'
+                                : event.includes('status') ? 'Status updated' : 'New notification';
+                            toastMessage.textContent = newest.message || newest.job_id || newest.vehicle_number || '';
+                            toast.hidden = false;
+                            window.clearTimeout(toastTimeout);
+                            toastTimeout = window.setTimeout(() => { toast.hidden = true; }, 8000);
+                        }
+                    }
+                    knownIds = currentIds;
+                } catch (error) {
+                    console.error('Unable to refresh notifications.', error);
+                }
+            };
+
+            refreshNotifications();
+            window.setInterval(refreshNotifications, 15000);
+        })();
+    </script>
+@endif
 <script>
 (() => {
     const toggle = document.querySelector('[data-sidebar-toggle]');

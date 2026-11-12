@@ -32,7 +32,7 @@ class VehicleTrackingController extends Controller
         return response()->json([
             'data' => VehicleGpsLogResource::collection($points)->resolve($request),
             'meta' => [
-                'vehicle_id' => $vehicle->id,
+                'vehicle_id' => (int) $vehicle->id,
                 'count' => $points->count(),
                 'from' => $points->first()?->recorded_at?->toIso8601String(),
                 'to' => $points->last()?->recorded_at?->toIso8601String(),

@@ -30,6 +30,16 @@ class LoginRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'max:255'],
             'device_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'latitude' => ['sometimes', 'required_with:longitude,speed_kph,recorded_at', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'required_with:latitude,speed_kph,recorded_at', 'numeric', 'between:-180,180'],
+            'speed_kph' => ['sometimes', 'nullable', 'numeric', 'between:0,300'],
+            'recorded_at' => [
+                'sometimes',
+                'nullable',
+                'date',
+                'after_or_equal:'.now()->subDay()->toIso8601String(),
+                'before_or_equal:'.now()->addMinutes(5)->toIso8601String(),
+            ],
         ];
     }
 }

@@ -1,0 +1,320 @@
+.operations-dashboard-layout .ops-incidents-map-view {
+    height: auto;
+    padding: 10px 12px 12px;
+}
+
+.operations-dashboard-layout .ops-live-map-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+    margin-bottom: 9px;
+}
+
+.operations-dashboard-layout .ops-live-map-toolbar .ops-dashboard-action {
+    min-height: 34px;
+    padding: 0 11px;
+}
+
+.operations-dashboard-layout .ops-map-ward-filter,
+.operations-dashboard-layout .ops-map-search {
+    display: grid;
+    gap: 4px;
+    color: #a9bfd8;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.operations-dashboard-layout .ops-map-ward-filter select,
+.operations-dashboard-layout .ops-map-search input {
+    width: 145px;
+    min-height: 34px;
+    padding: 0 9px;
+    border: 1px solid #2a4d70;
+    border-radius: 6px;
+    color: #e8f2ff;
+    background: #0a203b;
+    font: inherit;
+    font-size: 11px;
+}
+
+.operations-dashboard-layout .ops-map-control-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-left: auto;
+}
+
+.operations-dashboard-layout .ops-map-control-group button {
+    min-height: 34px;
+    padding: 0 9px;
+    border: 1px solid #2a4d70;
+    border-radius: 6px;
+    color: #c1d2e7;
+    background: #0b2543;
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.operations-dashboard-layout .ops-map-control-group button:hover:not(:disabled),
+.operations-dashboard-layout .ops-map-control-group button[aria-pressed="true"] {
+    border-color: #3289de;
+    color: #fff;
+    background: #123b64;
+}
+
+.operations-dashboard-layout .ops-map-control-group button:disabled {
+    cursor: not-allowed;
+    opacity: .48;
+}
+
+.operations-dashboard-layout .ops-live-map-shell {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgb(164 195 232 / 18%);
+    border-radius: 8px;
+    background: #0b2039;
+}
+
+.operations-dashboard-layout .ops-live-map {
+    width: 100%;
+    height: 440px;
+    background: #d7e2e8;
+}
+
+.operations-dashboard-layout .ops-live-map-message {
+    position: absolute;
+    z-index: 500;
+    top: 10px;
+    left: 50%;
+    max-width: calc(100% - 24px);
+    margin: 0;
+    padding: 8px 11px;
+    transform: translateX(-50%);
+    border: 1px solid #b88a32;
+    border-radius: 6px;
+    color: #fff0c2;
+    background: #332b19ed;
+    font-size: 11px;
+}
+
+.operations-dashboard-layout .ops-live-map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 14px;
+    padding: 9px 2px 2px;
+    color: #b7c9df;
+    font-size: 10px;
+}
+
+.operations-dashboard-layout .ops-live-map-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.operations-dashboard-layout .ops-live-map-legend i {
+    width: 9px;
+    height: 9px;
+    border: 1px solid #fff9;
+    border-radius: 50%;
+    background: #8797ac;
+}
+
+.operations-dashboard-layout .ops-live-map-legend .is-incident-critical { background: #e53945; }
+.operations-dashboard-layout .ops-live-map-legend .is-incident-high { background: #f28b24; }
+.operations-dashboard-layout .ops-live-map-legend .is-incident-medium { background: #e8c33a; }
+.operations-dashboard-layout .ops-live-map-legend .is-incident-low { background: #38ad68; }
+.operations-dashboard-layout .ops-live-map-legend .is-vehicle-on-road { background: #25b96b; }
+.operations-dashboard-layout .ops-live-map-legend .is-vehicle-off-road { background: #e53945; }
+.operations-dashboard-layout .ops-live-map-legend .is-vehicle-assigned { background: #3389e8; }
+.operations-dashboard-layout .ops-live-map-legend .is-vehicle-idle { background: #8797ac; }
+.operations-dashboard-layout .ops-live-map-legend .is-vehicle-at-incident { background: #f28b24; }
+.operations-dashboard-layout .ops-live-map-legend .is-density { background: #edb839; }
+
+.operations-dashboard-layout .ops-live-map-attribution {
+    margin: 7px 1px 0;
+    color: #8199b5;
+    font-size: 9px;
+}
+
+.operations-dashboard-layout .ops-live-map-attribution a {
+    color: #8fc2ff;
+}
+
+.operations-dashboard-layout .ops-live-map .leaflet-control-zoom a,
+.operations-dashboard-layout .ops-live-map .leaflet-bar a {
+    color: #dceaff;
+    border-color: #29496a;
+    background: #0b2543;
+}
+
+.operations-dashboard-layout .ops-live-map .leaflet-control-attribution {
+    color: #263d54;
+    background: rgb(255 255 255 / 84%);
+    font-size: 9px;
+}
+
+.operations-dashboard-layout .ops-live-map .leaflet-popup-content-wrapper,
+.operations-dashboard-layout .ops-live-map .leaflet-popup-tip {
+    color: #dceaff;
+    background: #0b2039;
+}
+
+.operations-dashboard-layout .ops-live-map .leaflet-popup-content-wrapper {
+    border: 1px solid #315477;
+    box-shadow: 0 10px 28px rgb(0 0 0 / 35%);
+}
+
+.operations-dashboard-layout .ops-live-map .leaflet-popup-content {
+    min-width: 225px;
+    margin: 12px;
+    font-size: 11px;
+}
+
+.operations-dashboard-layout .ops-map-popup h3 {
+    margin: 0 0 8px;
+    color: #fff;
+    font-size: 13px;
+}
+
+.operations-dashboard-layout .ops-map-popup dl {
+    display: grid;
+    grid-template-columns: minmax(75px, auto) minmax(0, 1fr);
+    gap: 5px 10px;
+    margin: 0;
+}
+
+.operations-dashboard-layout .ops-map-popup dt {
+    color: #93abc7;
+}
+
+.operations-dashboard-layout .ops-map-popup dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #e4efff;
+}
+
+.operations-dashboard-layout .ops-map-popup-action {
+    display: inline-flex;
+    margin-top: 10px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    color: #fff;
+    background: #0876e2;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.operations-dashboard-layout .ops-map-vehicle-icon {
+    position: relative;
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 2px solid #fff;
+    border-radius: 9px;
+    box-shadow: 0 2px 7px #071a35a8;
+    color: #fff;
+}
+
+.operations-dashboard-layout .ops-map-vehicle-icon svg {
+    width: 21px;
+    height: 21px;
+    fill: currentColor;
+}
+
+.operations-dashboard-layout .ops-map-vehicle-state {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    display: grid;
+    width: 14px;
+    height: 14px;
+    place-items: center;
+    border: 1px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    background: #071a35;
+}
+
+.operations-dashboard-layout .ops-map-vehicle-state svg {
+    width: 10px;
+    height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.5;
+}
+
+.operations-dashboard-layout .ops-map-vehicle-icon.is-on_road { background: #25b96b; }
+.operations-dashboard-layout .ops-map-vehicle-icon.is-off_road { background: #e53945; }
+.operations-dashboard-layout .ops-map-vehicle-icon.is-assigned { background: #3389e8; }
+.operations-dashboard-layout .ops-map-vehicle-icon.is-idle,
+.operations-dashboard-layout .ops-map-vehicle-icon.is-unknown { background: #7d8da2; }
+.operations-dashboard-layout .ops-map-vehicle-icon.is-at_incident { background: #f28b24; }
+
+.operations-dashboard-layout .ops-map-vehicle-label {
+    display: none;
+    margin-top: 2px;
+    padding: 2px 4px;
+    border: 1px solid #0a203b;
+    border-radius: 3px;
+    color: #fff;
+    background: #071a35e8;
+    font-size: 9px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-live-map.is-zoomed .ops-map-vehicle-label {
+    display: block;
+}
+
+.operations-dashboard-layout .ops-map-highlight {
+    outline: 2px solid #4bb7ff;
+    outline-offset: -2px;
+    background: rgb(27 116 190 / 16%) !important;
+}
+
+.operations-dashboard-layout .ops-incidents-table [data-map-incident][hidden],
+.operations-dashboard-layout .ops-vehicles-table [data-map-vehicle][hidden] {
+    display: none !important;
+}
+
+.operations-dashboard-layout .ops-map-density-count {
+    border: 0;
+    color: #071a35;
+    background: transparent;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+@media (max-width: 760px) {
+    .operations-dashboard-layout .ops-live-map-toolbar {
+        align-items: stretch;
+    }
+
+    .operations-dashboard-layout .ops-map-ward-filter,
+    .operations-dashboard-layout .ops-map-search {
+        flex: 1 1 135px;
+    }
+
+    .operations-dashboard-layout .ops-map-ward-filter select,
+    .operations-dashboard-layout .ops-map-search input {
+        width: 100%;
+    }
+
+    .operations-dashboard-layout .ops-map-control-group {
+        flex: 1 1 100%;
+        margin-left: 0;
+    }
+
+    .operations-dashboard-layout .ops-live-map {
+        height: 380px;
+    }
+}

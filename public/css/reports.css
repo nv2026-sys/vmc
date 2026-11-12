@@ -396,3 +396,227 @@
         justify-content: center;
     }
 }
+
+.operations-reports .report-stat-grid-seven {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.report-filter-actions {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.report-filter-actions .button {
+    min-height: 35px;
+}
+
+.report-data-panel {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.report-panel-heading .report-table-search {
+    display: grid;
+    min-width: min(250px, 100%);
+    gap: 5px;
+    color: #a9bfdc;
+    font-size: 9px;
+}
+
+.report-table-search input {
+    min-height: 33px;
+    padding: 6px 9px;
+    border: 1px solid #355477;
+    border-radius: 6px;
+    color: #edf4ff;
+    background: #0a1f3a;
+    font: inherit;
+}
+
+.report-table-scroll {
+    max-height: 620px;
+}
+
+.report-record-table {
+    min-width: 1700px;
+}
+
+.report-record-table thead th[data-order-column] {
+    cursor: pointer;
+}
+
+.report-record-table thead th[data-order-column]:hover {
+    color: #fff;
+    background: #18395f;
+}
+
+.report-priority-badge,
+.report-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 7px;
+    border: 1px solid #ffffff20;
+    border-radius: 999px;
+    color: #d7e6fb;
+    background: #173454;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.report-priority-badge.is-critical,
+.report-priority-badge.is-urgent,
+.report-status-badge.is-duplicate {
+    color: #ffb5af;
+    background: #702f36;
+}
+
+.report-priority-badge.is-high,
+.report-status-badge.is-en-route {
+    color: #ffd28f;
+    background: #70431c;
+}
+
+.report-priority-badge.is-medium,
+.report-priority-badge.is-normal,
+.report-status-badge.is-assigned,
+.report-status-badge.is-arrived,
+.report-status-badge.is-in-progress {
+    color: #b7d5ff;
+    background: #194879;
+}
+
+.report-priority-badge.is-low,
+.report-status-badge.is-completed {
+    color: #a1edc6;
+    background: #14583e;
+}
+
+.report-status-badge.is-received,
+.report-status-badge.is-transferred-to-112 {
+    color: #d3b7ff;
+    background: #4a3471;
+}
+
+.report-table-status {
+    min-height: 0;
+    padding: 0 15px;
+    color: #9db5d3;
+    font-size: 9px;
+}
+
+.report-table-status:not(:empty) {
+    padding-top: 9px;
+}
+
+.report-table-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid #ffffff15;
+    color: #9db5d3;
+    font-size: 9px;
+}
+
+.report-table-pagination > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.report-table-pagination button {
+    min-height: 29px;
+    padding: 5px 9px;
+    border: 1px solid #355477;
+    border-radius: 5px;
+    color: #d9e8fb;
+    background: #102d50;
+    font: inherit;
+    cursor: pointer;
+}
+
+.report-table-pagination button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.report-record-table .report-priority-badge,
+.report-record-table .report-status-badge {
+    text-transform: capitalize;
+}
+
+@media (max-width: 1050px) {
+    .operations-reports .report-stat-grid-seven {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 680px) {
+    .operations-reports .report-stat-grid-seven {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .report-panel-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .report-panel-heading .report-table-search {
+        width: 100%;
+    }
+
+    .report-table-pagination {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+@media print {
+    .operations-reports .page-heading,
+    .operations-reports .report-filter-form,
+    .operations-reports .report-table-search,
+    .operations-reports .report-table-pagination,
+    .operations-reports .report-heading-actions,
+    .operations-reports .report-table-status,
+    .operations-dashboard-sidebar,
+    .dashboard-sidebar,
+    .topbar,
+    nav {
+        display: none !important;
+    }
+
+    .operations-reports,
+    .operations-reports .panel {
+        color: #111;
+        background: #fff;
+        box-shadow: none;
+    }
+
+    .operations-reports .report-stat-grid-seven {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .operations-reports .table-scroll {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .operations-reports table {
+        min-width: 0;
+        color: #111;
+        font-size: 7pt;
+    }
+
+    .operations-reports th,
+    .operations-reports td {
+        color: #111;
+        border-color: #aaa;
+        background: #fff;
+    }
+}

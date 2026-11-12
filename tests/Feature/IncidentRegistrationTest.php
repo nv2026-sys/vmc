@@ -159,6 +159,9 @@ class IncidentRegistrationTest extends TestCase
         $this->get(route('app.jobs.show', $job))
             ->assertOk()
             ->assertSee($job->job_id)
+            ->assertSee('class="form-grid incident-facts"', false)
+            ->assertSee('>Caller</span>', false)
+            ->assertSee('accessibility-typography.css', false)
             ->assertSee('Incident history');
     }
 

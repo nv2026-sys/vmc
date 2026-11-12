@@ -24,36 +24,41 @@ class DashboardActivityTest extends TestCase
         $this->seed(RbacSeeder::class);
     }
 
-    public function test_dashboard_renders_recent_calls_and_jobs_in_a_rotating_feed(): void
+    public function test_dashboard_stops_after_the_incidents_and_vehicles_sections(): void
     {
         [$user, $ward] = $this->userAndWard();
-        $job = $this->job($ward, 'ROTATE-JOB-01');
-        JobCallLog::query()->create([
-            'emergency_job_id' => $job->id,
-            'caller_name' => 'Recent Caller',
-            'caller_phone' => '+91-90000-01001',
-            'call_source' => 'PHONE',
-            'received_at' => now(),
-            'created_by' => $user->id,
-        ]);
+        $this->job($ward, 'ROTATE-JOB-01');
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->get('/dashboard')
             ->assertOk()
-            ->assertSee('Incoming calls &amp; new jobs', false)
-            ->assertSee('Operations overview')
-            ->assertSee('Schematic map of saved station, incident and vehicle coordinates')
-            ->assertSee('data-activity-status', false)
+            ->assertSee('ops-stat-grid', false)
+            ->assertSee('ops-incidents-panel', false)
+            ->assertSee('ops-vehicles-panel', false)
+            ->assertSee('Incident Dashboard')
+            ->assertSee('Recent incidents')
+            ->assertSee('Vehicles')
+            ->assertSee('ROTATE-JOB-01')
             ->assertSee('nav-dropdown-trigger', false)
             ->assertSee('data-sidebar-toggle', false)
             ->assertSee('Incident archive')
-            ->assertSee('NEW CALL')
-            ->assertSee('NEW JOB')
-            ->assertSee('Society One')
-            ->assertSee('Recent Caller')
-            ->assertSee('ROTATE-JOB-01')
-            ->assertSee('data-activity-carousel', false)
-            ->assertSee('updates every 15 seconds');
+            ->assertDontSee('data-activity-carousel', false)
+            ->assertDontSee('Incident & station map')
+            ->assertDontSee('Fire station availability')
+            ->assertDontSee('Ward-wise pending jobs')
+            ->assertDontSee('Quick access');
+
+        $html = $response->getContent();
+        $this->assertLessThan(
+            strpos($html, 'ops-incidents-panel'),
+            strpos($html, 'ops-stat-grid'),
+            'The incidents table should appear after the summary counts.',
+        );
+        $this->assertLessThan(
+            strpos($html, 'ops-vehicles-panel'),
+            strpos($html, 'ops-incidents-panel'),
+            'The vehicle table should follow the incidents table.',
+        );
     }
 
     public function test_dashboard_activity_endpoint_returns_new_jobs_and_calls_with_station_scope(): void

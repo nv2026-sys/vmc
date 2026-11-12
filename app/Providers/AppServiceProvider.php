@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Database\SqlServerGrammar;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -25,6 +27,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (config('database.default') === 'sqlsrv') {
+            $connection = DB::connection('sqlsrv');
+            $connection->setQueryGrammar(new SqlServerGrammar($connection));
+        }
+
         Gate::before(static fn (User $user): ?bool => $user->hasRole('SUPER_ADMIN') ? true : null);
 
         RateLimiter::for('login', static function (Request $request): array {

@@ -16,42 +16,59 @@
     <section class="tracking-layout">
         <div class="panel tracking-map-panel">
             <div class="tracking-panel-heading">
-                <div><h2>Fleet location map</h2><p>Local coordinate plot · no third-party map service · refreshed at {{ now()->format('g:i:s A') }}</p></div>
+                <div><h2>{{ $selectedIncident ? 'Incident location map' : 'Fleet location map' }}</h2><p>{{ $selectedIncident ? $selectedIncident->job_id.' · '.$selectedIncident->incident_address : 'Vehicle GPS locations refresh automatically every 15 seconds.' }}</p></div>
                 <span class="tracking-count">{{ $vehicles->count() }} tracked {{ \Illuminate\Support\Str::plural('vehicle', $vehicles->count()) }}</span>
             </div>
-            @if ($vehicles->isNotEmpty())
-                <div class="tracking-map">
-                    <svg viewBox="0 0 800 480" role="img" aria-label="Map plot of latest vehicle GPS points and selected route">
-                        <defs>
-                            <pattern id="tracking-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(154,184,218,.12)" stroke-width="1"/>
-                            </pattern>
-                        </defs>
-                        <rect width="800" height="480" fill="url(#tracking-grid)"/>
-                        <path d="M0 400 C150 330 190 420 340 350 S600 315 800 205" class="tracking-road"/>
-                        <path d="M110 0 C155 115 205 240 350 480" class="tracking-road tracking-road-secondary"/>
-                        @if ($routePoints->count() > 1)
-                            <polyline points="{{ $routePath }}" class="tracking-route-line"/>
+            <link rel="stylesheet" href="{{ asset('css/dashboard-live-map.css') }}?v={{ filemtime(public_path('css/dashboard-live-map.css')) }}">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+            <div class="operations-dashboard-layout ops-tracking-map-scope">
+                <div class="ops-live-map-toolbar">
+                    <label class="ops-map-search">Vehicle
+                        <input type="search" data-map-search-vehicle placeholder="Search vehicle no.">
+                    </label>
+                    <div class="ops-map-control-group" role="group" aria-label="Map layers and display">
+                        <button type="button" data-map-layer="vehicles" aria-pressed="true">Vehicles</button>
+                        @if (auth()->user()?->hasPermission('jobs.view'))
+                            <button type="button" data-map-layer="incidents" aria-pressed="true">Incidents</button>
+                            <button type="button" data-map-layer="density" aria-pressed="true">Density</button>
                         @endif
-                        @foreach ($markers as $marker)
-                            <g class="{{ $marker['is_selected'] ? 'tracking-marker is-selected' : 'tracking-marker' }}">
-                                <circle cx="{{ $marker['x'] }}" cy="{{ $marker['y'] }}" r="13" class="tracking-marker-halo"/>
-                                <circle cx="{{ $marker['x'] }}" cy="{{ $marker['y'] }}" r="6" class="tracking-marker-dot"/>
-                                <text x="{{ $marker['x'] + 12 }}" y="{{ $marker['y'] - 9 }}">{{ $marker['vehicle']->vehicle_number }}</text>
-                                <title>{{ $marker['vehicle']->vehicle_number }} · {{ $marker['vehicle']->latestGpsLog->latitude }}, {{ $marker['vehicle']->latestGpsLog->longitude }}</title>
-                            </g>
-                        @endforeach
-                        @foreach ($routePoints as $index => $point)
-                            <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="{{ $loop->first || $loop->last ? 6 : 3.5 }}" class="{{ $loop->first ? 'tracking-route-point route-start' : ($loop->last ? 'tracking-route-point route-end' : 'tracking-route-point') }}">
-                                <title>{{ $point['log']->recorded_at->format('M j, g:i:s A') }} · {{ $point['log']->latitude }}, {{ $point['log']->longitude }}</title>
-                            </circle>
-                        @endforeach
-                    </svg>
-                    <div class="tracking-map-legend"><span><i class="legend-live"></i> Latest location</span><span><i class="legend-route"></i> Selected route</span></div>
+                        <button type="button" data-map-fullscreen>Fullscreen</button>
+                        <button type="button" data-map-satellite disabled title="Satellite imagery provider is not configured">Satellite</button>
+                        <button type="button" data-map-boundaries disabled title="Ward boundary data is not available">Ward boundaries</button>
+                        <button type="button" data-map-refresh>Refresh map</button>
+                    </div>
                 </div>
-            @else
-                <div class="tracking-empty"><span>⌖</span><strong>No GPS points received</strong><p>Vehicle positions will appear here after the first authenticated mobile GPS update.</p></div>
-            @endif
+                <div class="ops-live-map-shell">
+                    <div class="ops-live-map" id="ops-live-map" role="application" aria-label="Live vehicle GPS locations"
+                        data-map-endpoint="{{ $mapRefreshUrl }}"
+                        data-map-auto-refresh="15000"
+                        data-map-selected-vehicle="{{ $selectedVehicle?->vehicle_number }}"
+                        data-map-selected-incident="{{ $selectedIncident?->job_id }}"
+                        data-map-payload="{{ json_encode($mapData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) }}">
+                    </div>
+                    <p class="ops-live-map-message" data-map-message role="status" hidden></p>
+                </div>
+                <div class="ops-live-map-legend" aria-label="Map legend">
+                    <span><i class="is-vehicle-on-road"></i> On Road / Moving</span>
+                    <span><i class="is-vehicle-off-road"></i> Off Road</span>
+                    <span><i class="is-vehicle-assigned"></i> Assigned</span>
+                    <span><i class="is-vehicle-idle"></i> Idle / Free</span>
+                    <span><i class="is-vehicle-at-incident"></i> At Incident / On Site</span>
+                    @if (auth()->user()?->hasPermission('jobs.view'))
+                        <span><i class="is-incident-critical"></i> Critical incident</span>
+                        <span><i class="is-incident-high"></i> High incident</span>
+                        <span><i class="is-incident-medium"></i> Medium incident</span>
+                        <span><i class="is-incident-low"></i> Low incident</span>
+                        <span><i class="is-density"></i> Ward incident density</span>
+                    @endif
+                </div>
+                <p class="ops-live-map-attribution">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Positions show the latest authenticated GPS update.</p>
+            </div>
+            <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <script defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+            <script defer src="{{ asset('dashboard-live-map.js') }}?v={{ filemtime(public_path('dashboard-live-map.js')) }}"></script>
         </div>
 
         <aside class="panel tracking-units-panel">
@@ -62,17 +79,19 @@
                         @php
                             $isStale = $vehicle->latestGpsLog->recorded_at->lt(now()->subMinutes(5));
                             $activeAssignment = $vehicle->assignments->first();
+                            $displayStatus = \App\Services\VehicleDisplayStatus::describe($vehicle, $activeAssignment);
                         @endphp
-                        <a class="tracking-unit {{ $selectedVehicle?->is($vehicle) ? 'is-selected' : '' }}" href="{{ route('app.tracking', ['vehicle_id' => $vehicle->id]) }}">
+                        <a class="tracking-unit {{ $selectedVehicle?->is($vehicle) ? 'is-selected' : '' }}" data-map-vehicle="{{ $vehicle->vehicle_number }}" data-map-ward-id="{{ $activeAssignment?->emergencyJob?->ward_id }}" href="{{ url('/vehicles/'.$vehicle->id) }}">
                             <span class="tracking-unit-icon">⌖</span>
                             <span class="tracking-unit-details">
                                 <strong>{{ $vehicle->vehicle_number }}</strong>
-                                <small>{{ $vehicle->fireStation?->name ?? 'Station unavailable' }} · {{ $vehicle->status }}</small>
+                                <small>{{ $vehicle->fireStation?->name ?? 'Station unavailable' }}</small>
+                                <small><span class="vehicle-status-badge is-{{ $displayStatus['class'] }}">{{ $displayStatus['label'] }}</span></small>
                                 @if ($activeAssignment?->emergencyJob)
                                     <small>{{ $activeAssignment->emergencyJob->job_id }} · {{ str_replace('_', ' ', $activeAssignment->status) }}</small>
                                 @endif
                             </span>
-                            <span class="tracking-unit-time {{ $isStale ? 'is-stale' : '' }}">{{ $isStale ? 'STALE' : 'LIVE' }}<small>{{ $vehicle->latestGpsLog->recorded_at->diffForHumans() }}</small></span>
+                            <span class="tracking-unit-time {{ $isStale ? 'is-stale' : '' }}">{{ $isStale ? 'STALE' : 'FRESH' }}<small>{{ $vehicle->latestGpsLog->recorded_at->diffForHumans() }}</small></span>
                         </a>
                     @endforeach
                 </div>
@@ -116,7 +135,4 @@
         </section>
     @endif
 </section>
-<script>
-    window.setTimeout(() => window.location.reload(), 30000);
-</script>
 @endsection

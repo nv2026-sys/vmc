@@ -16,7 +16,7 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
+            'id' => (int) $this->id,
             'name' => $this->name,
             'email' => $this->email,
             'roles' => $this->whenLoaded('roles', fn () => $this->roles
@@ -34,7 +34,7 @@ class UserResource extends JsonResource
                     $stationIds = array_merge($stationIds, $this->managedFireStations->modelKeys());
                 }
 
-                return array_values(array_unique($stationIds));
+                return array_values(array_unique(array_map('intval', $stationIds)));
             }),
         ];
     }

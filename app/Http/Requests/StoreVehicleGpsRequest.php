@@ -14,7 +14,7 @@ class StoreVehicleGpsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'assignment_id' => ['required', 'integer', 'exists:job_assignments,id'],
+            'assignment_id' => ['nullable', 'integer', 'exists:job_assignments,id'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'speed_kph' => ['nullable', 'numeric', 'between:0,300'],

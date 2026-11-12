@@ -27,6 +27,19 @@ class OperationsReportRequest extends FormRequest
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d'],
             'station_id' => ['nullable', 'integer', 'exists:fire_stations,id'],
+            'ward_id' => ['nullable', 'integer', 'exists:wards,id'],
+            'area' => ['nullable', 'string', 'max:150'],
+            'incident_type' => ['nullable', 'string', 'max:60'],
+            'priority' => ['nullable', 'string', 'max:20'],
+            'status' => ['nullable', 'string', 'max:40'],
+            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
+            'caller' => ['nullable', 'string', 'max:120'],
+            'search' => ['nullable', 'string', 'max:150'],
+            'draw' => ['nullable', 'integer', 'min:0'],
+            'start' => ['nullable', 'integer', 'min:0'],
+            'length' => ['nullable', 'integer', 'between:1,100'],
+            'order_column' => ['nullable', 'integer', 'between:0,16'],
+            'order_dir' => ['nullable', 'in:asc,desc'],
         ];
     }
 

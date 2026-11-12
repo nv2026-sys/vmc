@@ -1,0 +1,194 @@
+body.operations-dashboard-page,
+body.login-body {
+    font-size: 15px;
+}
+
+.brand-logo {
+    display: block;
+    height: auto;
+    border-radius: 4px;
+    background: #fff;
+    object-fit: contain;
+}
+
+.operations-dashboard-page .sidebar .brand-logo {
+    width: 100%;
+    max-width: 210px;
+}
+
+.login-body .brand-logo {
+    width: min(380px, 42vw);
+    max-width: 100%;
+}
+
+.operations-dashboard-page .navigation .nav-link {
+    font-size: 13px;
+}
+
+.operations-dashboard-page .nav-caption,
+.operations-dashboard-page .workspace small,
+.operations-dashboard-page .brand small {
+    font-size: 10px;
+}
+
+.operations-dashboard-page .app-heading strong {
+    font-size: 15px;
+}
+
+.operations-dashboard-page .app-heading small,
+.operations-dashboard-page .topbar-date {
+    font-size: 12px;
+}
+
+.operations-dashboard-page .account-name {
+    font-size: 13px;
+}
+
+.operations-dashboard-page .page-heading h1 {
+    font-size: 30px;
+}
+
+.operations-dashboard-page .page-heading .eyebrow {
+    font-size: 11px;
+}
+
+.operations-dashboard-page .panel:not(.ops-panel) {
+    padding: 20px;
+    font-size: 15px;
+}
+
+.operations-dashboard-page .panel:not(.ops-panel) > h2,
+.operations-dashboard-page .panel-heading h2 {
+    font-size: 20px;
+}
+
+.operations-dashboard-page .panel:not(.ops-panel) p,
+.operations-dashboard-page .panel:not(.ops-panel) .muted {
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.operations-dashboard-page .panel:not(.ops-panel) table th,
+.operations-dashboard-page .panel:not(.ops-panel) table td {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.operations-dashboard-page .panel:not(.ops-panel) .button,
+.operations-dashboard-page .panel:not(.ops-panel) input,
+.operations-dashboard-page .panel:not(.ops-panel) select,
+.operations-dashboard-page .panel:not(.ops-panel) textarea,
+.operations-dashboard-page .search-control input,
+.operations-dashboard-page .managed-user-form input:not([type="checkbox"]):not([type="hidden"]),
+.operations-dashboard-page .managed-user-form select,
+.operations-dashboard-page .managed-user-form textarea {
+    font-size: 14px;
+}
+
+.operations-dashboard-page .panel:not(.ops-panel) .status {
+    font-size: 11px;
+}
+
+.operations-dashboard-page .directory-toolbar p,
+.operations-dashboard-page .record-count,
+.operations-dashboard-page .pagination,
+.operations-dashboard-page .empty-state p,
+.operations-dashboard-page .privacy-note {
+    font-size: 13px;
+}
+
+.login-body .login-card > p,
+.login-body .login-form label,
+.login-body .login-form input,
+.login-body .login-form button,
+.login-body .setup-note,
+.login-body .secure-note {
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.login-body .login-card h2 {
+    font-size: 25px;
+}
+
+.operations-dashboard-page .incident-details-panel {
+    padding: 22px 24px;
+}
+
+.operations-dashboard-page .incident-details-panel > h2 {
+    margin: 0;
+}
+
+.operations-dashboard-page .incident-facts {
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.operations-dashboard-page .incident-facts > div {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+    padding: 14px 16px;
+    border: 1px solid rgb(164 195 232 / 14%);
+    border-radius: 8px;
+    background: rgb(5 22 42 / 28%);
+}
+
+.operations-dashboard-page .incident-facts > div > span {
+    color: #a9bfdc;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.operations-dashboard-page .incident-facts > div > strong {
+    color: #f0f5fd;
+    font-size: 16px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.operations-dashboard-layout .ops-page-heading h1 {
+    font-size: 30px;
+}
+
+.operations-dashboard-layout .ops-page-heading p,
+.operations-dashboard-layout .ops-panel-heading p {
+    font-size: 14px;
+}
+
+.operations-dashboard-layout .ops-panel:not(.ops-recent-panel) h2 {
+    font-size: 19px;
+}
+
+.operations-dashboard-layout .ops-stat-card > div > span,
+.operations-dashboard-layout .ops-station-metric small,
+.operations-dashboard-layout .ops-table th {
+    font-size: 12px;
+}
+
+.operations-dashboard-layout .ops-table td,
+.operations-dashboard-layout .ops-job-facts > div > span,
+.operations-dashboard-layout .ops-job-facts > div > strong {
+    font-size: 14px;
+}
+
+@media (max-width: 760px) {
+    .operations-dashboard-page .panel:not(.ops-panel) {
+        padding: 16px;
+    }
+
+    .operations-dashboard-page .incident-details-panel {
+        padding: 18px 16px;
+    }
+
+    .operations-dashboard-page .incident-facts {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .operations-dashboard-page .page-heading h1,
+    .operations-dashboard-layout .ops-page-heading h1 {
+        font-size: 27px;
+    }
+}

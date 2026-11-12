@@ -18,6 +18,7 @@ class VehicleRouteRequest extends FormRequest
         return [
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
             'assignment_id' => ['nullable', 'integer', 'exists:job_assignments,id'],
+            'incident_id' => ['nullable', 'integer'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
             'limit' => ['nullable', 'integer', 'between:1,500'],

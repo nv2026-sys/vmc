@@ -20,17 +20,17 @@
     @if (session('status')) <div class="success-notice" role="status">{{ session('status') }}</div> @endif
     @if ($errors->any()) <div class="alert" role="alert">{{ $errors->first() }}</div> @endif
 
-    <section class="panel">
+    <section class="panel incident-details-panel">
         <h2>Caller and incident</h2>
-        <div class="form-grid">
-            <div><small>Caller</small><strong>{{ $job->caller_name }}</strong></div>
-            <div><small>Phone</small><strong>{{ $job->caller_phone }}</strong></div>
-            <div><small>Call source</small><strong>{{ str_replace('_', ' ', $job->call_source) }}</strong></div>
-            <div><small>Type · priority</small><strong>{{ str_replace('_', ' ', $job->incident_type) }} · {{ $job->priority }}</strong></div>
-            <div class="field-wide"><small>Address</small><strong>{{ $job->incident_address }}</strong></div>
-            <div><small>Society / area</small><strong>{{ $job->society_name ?: 'Not recorded' }}</strong></div>
-            <div><small>Coordinates</small><strong>{{ $job->latitude && $job->longitude ? $job->latitude.', '.$job->longitude : 'Not recorded' }}</strong></div>
-            <div class="field-wide"><small>Intake remarks</small><strong>{{ $job->remarks ?: '—' }}</strong></div>
+        <div class="form-grid incident-facts">
+            <div><span>Caller</span><strong>{{ $job->caller_name }}</strong></div>
+            <div><span>Phone</span><strong>{{ $job->caller_phone }}</strong></div>
+            <div><span>Call source</span><strong>{{ str_replace('_', ' ', $job->call_source) }}</strong></div>
+            <div><span>Type · priority</span><strong>{{ str_replace('_', ' ', $job->incident_type) }} · {{ $job->priority }}</strong></div>
+            <div class="field-wide"><span>Address</span><strong>{{ $job->incident_address }}</strong></div>
+            <div><span>Society / area</span><strong>{{ $job->society_name ?: 'Not recorded' }}</strong></div>
+            <div><span>Coordinates</span><strong>{{ $job->latitude && $job->longitude ? $job->latitude.', '.$job->longitude : 'Not recorded' }}</strong></div>
+            <div class="field-wide"><span>Intake remarks</span><strong>{{ $job->remarks ?: '—' }}</strong></div>
         </div>
     </section>
 
@@ -40,34 +40,41 @@
                 <div><h2>Response units</h2><p class="muted">Each vehicle is assigned and tracked independently.</p></div>
             </div>
             @if ($job->assignments->isNotEmpty())
-                <div class="table-scroll"><table><thead><tr><th>Vehicle</th><th>Station</th><th>Team</th><th>Assigned by</th><th>Status</th><th>Next action</th></tr></thead><tbody>
+                <div class="table-scroll"><table><thead><tr><th>Vehicle</th><th>Station</th><th>Team</th><th>Assigned by</th><th>Status</th><th>Update status</th></tr></thead><tbody>
                     @foreach ($job->assignments as $assignment)
-                        @php
-                            $nextAssignmentStatus = [
-                                \App\Models\JobAssignment::STATUS_ASSIGNED => \App\Models\JobAssignment::STATUS_EN_ROUTE,
-                                \App\Models\JobAssignment::STATUS_EN_ROUTE => \App\Models\JobAssignment::STATUS_ARRIVED,
-                                \App\Models\JobAssignment::STATUS_ARRIVED => \App\Models\JobAssignment::STATUS_IN_PROGRESS,
-                                \App\Models\JobAssignment::STATUS_IN_PROGRESS => \App\Models\JobAssignment::STATUS_COMPLETED,
-                            ][$assignment->status] ?? null;
-                        @endphp
                         <tr>
                             <td><strong>{{ $assignment->vehicle?->vehicle_number ?? 'Vehicle unavailable' }}</strong></td>
                             <td>{{ $assignment->fireStation?->name ?? '—' }}</td>
-                            <td>{{ $assignment->team?->name ?? 'Not assigned' }}@if ($assignment->teamLeader) <small class="muted"> · {{ $assignment->teamLeader->name }}</small>@endif</td>
+                            <td>
+                                Driver: {{ $assignment->assignedDriver?->name ?? 'Unassigned' }}
+                                @if ($assignment->team)
+                                    <br><small class="muted">Team: {{ $assignment->team->name }}@if ($assignment->teamLeader) · {{ $assignment->teamLeader->name }}@endif</small>
+                                @endif
+                            </td>
                             <td>{{ $assignment->assigner?->name ?? 'System' }}</td>
                             <td><span class="status">{{ str_replace('_', ' ', $assignment->status) }}</span></td>
                             <td>
-                                @if ($nextAssignmentStatus && in_array($assignment->id, $updatableAssignmentIds, true) && ! $assignment->released_at)
+                                @if (in_array((string) $assignment->getKey(), $updatableAssignmentIds, true))
                                     <form method="POST" action="{{ route('app.jobs.assignments.status', [$job->id, $assignment->id]) }}" class="managed-user-form incident-form">
                                         @csrf @method('PATCH')
-                                        <input type="hidden" name="status" value="{{ $nextAssignmentStatus }}">
+                                        <label>Status
+                                            <select name="status">
+                                                @foreach ([
+                                                    \App\Models\JobAssignment::STATUS_ASSIGNED => 'Assigned',
+                                                    \App\Models\JobAssignment::STATUS_EN_ROUTE => 'En route',
+                                                    \App\Models\JobAssignment::STATUS_ARRIVED => 'Arrived',
+                                                    \App\Models\JobAssignment::STATUS_IN_PROGRESS => 'In progress',
+                                                    \App\Models\JobAssignment::STATUS_COMPLETED => 'Completed',
+                                                ] as $statusValue => $statusLabel)
+                                                    <option value="{{ $statusValue }}" @selected($assignment->status === $statusValue)>{{ $statusLabel }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
                                         <label>Update note<input name="remarks" maxlength="2000" placeholder="Optional"></label>
-                                        <button class="button button-light" type="submit">{{ str_replace('_', ' ', $nextAssignmentStatus) }}</button>
+                                        <button class="button button-light" type="submit">Update</button>
                                     </form>
-                                @elseif ($assignment->released_at)
-                                    <span class="muted">Unit released {{ $assignment->released_at->format('M j, g:i A') }}</span>
                                 @else
-                                    <span class="muted">No action available</span>
+                                    <span class="muted">Status update unavailable</span>
                                 @endif
                             </td>
                         </tr>
@@ -82,6 +89,7 @@
                     <form method="POST" action="{{ route('app.jobs.assignments.store', $job->id) }}" class="managed-user-form incident-form assignment-form">
                         @csrf
                         <h3>Assign one or more units</h3>
+                        <p class="muted">A driver can take another incident on the same vehicle. To use a different vehicle, complete the driver's current assignment first. The station must also cover this incident's ward.</p>
                         <div id="assignment-rows">
                             <div class="assignment-row form-grid">
                                 <label>Fire station
@@ -98,6 +106,16 @@
                                         @foreach ($assignableStations as $station)
                                             @foreach ($station->vehicles as $vehicle)
                                                 <option value="{{ $vehicle->id }}" data-station="{{ $station->id }}">{{ $vehicle->vehicle_number }} · {{ str_replace('_', ' ', $vehicle->vehicle_type) }}</option>
+                                            @endforeach
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label>Vehicle driver
+                                    <select name="assignments[0][driver_user_id]" data-field="driver_user_id" class="assignment-driver" required>
+                                        <option value="">Select driver</option>
+                                        @foreach ($assignableStations as $station)
+                                            @foreach ($station->users as $driver)
+                                                <option value="{{ $driver->id }}" data-station="{{ $station->id }}">{{ $driver->name }}</option>
                                             @endforeach
                                         @endforeach
                                     </select>
@@ -138,6 +156,16 @@
                                     @endforeach
                                 </select>
                             </label>
+                            <label>Vehicle driver
+                                <select data-field="driver_user_id" class="assignment-driver" required>
+                                    <option value="">Select driver</option>
+                                    @foreach ($assignableStations as $station)
+                                        @foreach ($station->users as $driver)
+                                            <option value="{{ $driver->id }}" data-station="{{ $station->id }}">{{ $driver->name }}</option>
+                                        @endforeach
+                                    @endforeach
+                                </select>
+                            </label>
                             <label>Response team (optional)
                                 <select data-field="team_id" class="assignment-team">
                                     <option value="">No team selected</option>
@@ -152,7 +180,7 @@
                         </div>
                     </template>
                 @else
-                    <p class="muted">No active station with an available vehicle covers this incident ward.</p>
+                    <p class="muted">No station covering this incident ward has both an available On Road vehicle and an active vehicle driver.</p>
                 @endif
             @endif
         </section>
@@ -229,7 +257,7 @@
 
         const filterResources = (row) => {
             const stationId = row.querySelector('.assignment-station').value;
-            row.querySelectorAll('.assignment-vehicle option[data-station], .assignment-team option[data-station]').forEach((option) => {
+            row.querySelectorAll('.assignment-vehicle option[data-station], .assignment-driver option[data-station], .assignment-team option[data-station]').forEach((option) => {
                 const available = !stationId || option.dataset.station === stationId;
                 option.hidden = !available;
                 option.disabled = !available;

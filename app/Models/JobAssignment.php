@@ -18,12 +18,15 @@ class JobAssignment extends Model
 
     public const STATUS_COMPLETED = 'COMPLETED';
 
+    public const STATUS_DECLINED = 'DECLINED';
+
     protected $fillable = [
         'emergency_job_id',
         'fire_station_id',
         'vehicle_id',
         'team_id',
         'team_leader_user_id',
+        'assigned_driver_user_id',
         'assigned_by',
         'assigned_at',
         'released_at',
@@ -65,6 +68,11 @@ class JobAssignment extends Model
         return $this->belongsTo(User::class, 'team_leader_user_id');
     }
 
+    public function assignedDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_driver_user_id');
+    }
+
     public function assigner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
@@ -78,5 +86,10 @@ class JobAssignment extends Model
     public function gpsLogs(): HasMany
     {
         return $this->hasMany(VehicleGpsLog::class);
+    }
+
+    public function actionEvents(): HasMany
+    {
+        return $this->hasMany(JobAssignmentAction::class, 'job_assignment_id');
     }
 }

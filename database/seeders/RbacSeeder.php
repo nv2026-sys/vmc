@@ -124,6 +124,28 @@ class RbacSeeder extends Seeder
                     $details['permissions'],
                 ));
             }
+
+            foreach ([
+                'CONTROL_ROOM' => 'CONTROL_ROOM_ADMIN',
+                'STATION_OFFICER' => 'FIRE_STATION_ADMIN',
+                'DRIVER' => 'VEHICLE_DRIVER',
+            ] as $legacyCode => $currentCode) {
+                $legacyRole = Role::query()->where('code', $legacyCode)->first();
+                $currentRole = Role::query()->where('code', $currentCode)->firstOrFail();
+
+                if (! $legacyRole) {
+                    continue;
+                }
+
+                $legacyRole->users()->select('users.id')->withPivot('assigned_by')->each(
+                    function ($user) use ($legacyRole, $currentRole): void {
+                        $user->roles()->syncWithoutDetaching([
+                            $currentRole->id => ['assigned_by' => $user->pivot->assigned_by],
+                        ]);
+                        $legacyRole->users()->detach($user->id);
+                    },
+                );
+            }
         });
     }
 }

@@ -30,8 +30,10 @@ class FleetController extends Controller
                 'emergencyJob.ward:id,name,code',
                 'fireStation:id,name,code',
                 'vehicle:id,vehicle_number,vehicle_type,status,latitude,longitude',
+                'vehicle.latestGpsLog',
                 'team:id,name',
                 'teamLeader:id,name',
+                'assignedDriver:id,name',
             ])
             ->orderByDesc('assigned_at')
             ->paginate((int) ($validated['per_page'] ?? 15))
@@ -63,7 +65,11 @@ class FleetController extends Controller
                 'latestGpsLog',
                 'assignments' => fn (Relation $assignments) => $this->scopeToDriver($assignments, $driver)
                     ->whereNull('released_at')
-                    ->with(['emergencyJob:id,job_id,incident_type,priority,status', 'team:id,name']),
+                    ->with([
+                        'emergencyJob:id,job_id,incident_type,priority,status,society_name,incident_address,latitude,longitude',
+                        'team:id,name',
+                        'assignedDriver:id,name',
+                    ]),
             ])
             ->orderBy('vehicle_number')
             ->paginate((int) ($validated['per_page'] ?? 15))
@@ -93,7 +99,6 @@ class FleetController extends Controller
                 filter_var($validated['unread_only'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 fn ($query) => $query->whereNull('read_at'),
             )
-            ->latest('created_at')
             ->paginate((int) ($validated['per_page'] ?? 15))
             ->withQueryString();
 
@@ -136,13 +141,7 @@ class FleetController extends Controller
 
     private function scopeToDriver(Builder|Relation $assignments, User $driver): Builder|Relation
     {
-        return $assignments->where(function (Builder $query) use ($driver): void {
-            $query->where('team_leader_user_id', $driver->id)
-                ->orWhereHas('team.members', function (Builder $members) use ($driver): void {
-                    $members->where('users.id', $driver->id)
-                        ->whereNull('team_members.left_at');
-                });
-        });
+        return $assignments->where('assigned_driver_user_id', $driver->id);
     }
 
     private function ensureDriver(User $user): void

@@ -14,7 +14,7 @@ class OperationsReportController extends Controller
     public function __invoke(OperationsReportRequest $request): JsonResponse
     {
         return response()->json([
-            'data' => $this->reports->report($request->user(), $request->validated()),
+            'data' => $this->reports->report($request->user(), $request->validated(), true),
         ]);
     }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\FireStation;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\InitialSuperAdminSeeder;
@@ -103,5 +104,78 @@ class RbacTest extends TestCase
             ->getJson('/api/v1/permission-check')
             ->assertOk()
             ->assertJsonPath('allowed', true);
+    }
+
+    public function test_super_admin_can_create_a_custom_role_with_selected_permissions(): void
+    {
+        $superAdmin = User::factory()->create();
+        $superAdmin->roles()->attach(Role::query()->where('code', 'SUPER_ADMIN')->value('id'));
+
+        $this->actingAs($superAdmin)
+            ->get('/roles')
+            ->assertOk()
+            ->assertSee('+ Add role');
+
+        $this->get(route('app.roles.create'))
+            ->assertOk()
+            ->assertSee('Create role')
+            ->assertSee('jobs.view');
+
+        $permission = Permission::query()->where('code', 'jobs.view')->firstOrFail();
+        $this->post(route('app.roles.store'), [
+            'name' => 'Incident Viewer',
+            'code' => 'INCIDENT_VIEWER',
+            'description' => 'View permitted incident information.',
+            'permissions' => [$permission->id],
+        ])
+            ->assertRedirect(route('app.roles'))
+            ->assertSessionHas('status', 'Incident Viewer role created.');
+
+        $role = Role::query()->where('code', 'INCIDENT_VIEWER')->firstOrFail();
+        $this->assertFalse($role->is_system);
+        $this->assertTrue($role->permissions->contains('code', 'jobs.view'));
+        $this->assertDatabaseHas('audit_logs', [
+            'event' => 'roles.created',
+            'subject_id' => (string) $role->id,
+        ]);
+
+        $station = FireStation::query()->create([
+            'code' => 'FS-CUSTOM-ROLE',
+            'name' => 'Custom Role Station',
+            'address' => '1 Access Road',
+        ]);
+        $this->get('/users/create')
+            ->assertOk()
+            ->assertSee('Incident Viewer');
+        $this->post('/users', [
+            'name' => 'Incident Viewer User',
+            'email' => 'incident.viewer@example.test',
+            'role_code' => 'INCIDENT_VIEWER',
+            'password' => 'secure-custom-role-password',
+            'station_ids' => [$station->id],
+            'is_active' => '1',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('user_roles', [
+            'user_id' => User::query()->where('email', 'incident.viewer@example.test')->value('id'),
+            'role_id' => $role->id,
+        ]);
+    }
+
+    public function test_only_users_with_role_management_permission_can_create_roles(): void
+    {
+        $dispatcher = User::factory()->create();
+        $dispatcher->roles()->attach(Role::query()->where('code', 'DISPATCH_OPERATOR')->value('id'));
+
+        $this->actingAs($dispatcher)
+            ->get('/roles/create')
+            ->assertForbidden();
+
+        $this->post('/roles', [
+            'name' => 'Unauthorized Role',
+            'code' => 'UNAUTHORIZED_ROLE',
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('roles', ['code' => 'UNAUTHORIZED_ROLE']);
     }
 }

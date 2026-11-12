@@ -105,6 +105,7 @@ class IncidentController extends Controller
             'assignments.vehicle:id,vehicle_number',
             'assignments.team:id,name',
             'assignments.teamLeader',
+            'assignments.assignedDriver:id,name',
             'assignments.assigner:id,name',
             'statusHistory.actor:id,name',
             'statusHistory.assignment.vehicle:id,vehicle_number',
@@ -119,7 +120,8 @@ class IncidentController extends Controller
             'canAssign' => $canAssign,
             'updatableAssignmentIds' => $job->assignments
                 ->filter(fn ($assignment): bool => $this->workflow->canUpdateAssignment($request->user(), $assignment))
-                ->modelKeys(),
+                ->map(fn ($assignment): string => (string) $assignment->getKey())
+                ->all(),
             'possibleDuplicates' => $job->status === EmergencyJob::STATUS_RECEIVED
                 ? $this->workflow->possibleDuplicates($request->user(), $job->caller_phone, $job->id)
                 : collect(),

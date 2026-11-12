@@ -76,7 +76,7 @@ class DashboardController extends Controller
                 ],
                 'stations' => $stations
                     ->map(fn (FireStation $station): array => [
-                        'id' => $station->id,
+                        'id' => (int) $station->id,
                         'code' => $station->code,
                         'name' => $station->name,
                         'address' => $station->address,

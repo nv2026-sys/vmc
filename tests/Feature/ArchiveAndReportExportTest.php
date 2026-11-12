@@ -143,24 +143,30 @@ class ArchiveAndReportExportTest extends TestCase
     public function test_reports_download_csv_xlsx_and_pdf_for_the_selected_period(): void
     {
         [$admin, , $ward] = $this->stationAdmin();
-        $this->job($ward, EmergencyJob::STATUS_COMPLETED);
-        $query = ['from' => now()->toDateString(), 'to' => now()->toDateString()];
+        $included = $this->job($ward, EmergencyJob::STATUS_COMPLETED);
+        $included->update(['job_id' => 'VMC-EXPORT-MATCH']);
+        $excluded = $this->job($ward, EmergencyJob::STATUS_COMPLETED);
+        $excluded->update(['job_id' => 'VMC-EXPORT-EXCLUDED', 'priority' => 'LOW']);
+        $query = ['from' => now()->toDateString(), 'to' => now()->toDateString(), 'priority' => 'HIGH'];
 
         $csv = $this->actingAs($admin)->get(route('app.reports.export', ['format' => 'csv'] + $query));
         $csv->assertOk()
-            ->assertDownload('vmc-operations-'.$query['from'].'-to-'.$query['to'].'.csv')
+            ->assertDownload('vmc-incident-report-'.$query['from'].'-to-'.$query['to'].'.csv')
             ->assertHeader('content-type', 'text/csv; charset=UTF-8');
-        $this->assertStringContainsString('Total incidents', $csv->streamedContent());
+        $csvContent = $csv->streamedContent();
+        $this->assertStringContainsString('Total incidents', $csvContent);
+        $this->assertStringContainsString('VMC-EXPORT-MATCH', $csvContent);
+        $this->assertStringNotContainsString('VMC-EXPORT-EXCLUDED', $csvContent);
 
         $xlsx = $this->get(route('app.reports.export', ['format' => 'xlsx'] + $query));
         $xlsx->assertOk()
-            ->assertDownload('vmc-operations-'.$query['from'].'-to-'.$query['to'].'.xlsx')
+            ->assertDownload('vmc-incident-report-'.$query['from'].'-to-'.$query['to'].'.xlsx')
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertStringStartsWith("PK\x03\x04", $xlsx->streamedContent());
 
         $pdf = $this->get(route('app.reports.export', ['format' => 'pdf'] + $query));
         $pdf->assertOk()
-            ->assertDownload('vmc-operations-'.$query['from'].'-to-'.$query['to'].'.pdf')
+            ->assertDownload('vmc-incident-report-'.$query['from'].'-to-'.$query['to'].'.pdf')
             ->assertHeader('content-type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-', $pdf->getContent());
 

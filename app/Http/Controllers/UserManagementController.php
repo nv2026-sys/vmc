@@ -26,13 +26,19 @@ class UserManagementController extends Controller
         'REPORT_VIEWER' => 3,
         'VEHICLE_DRIVER' => 4,
         'TEAM_MEMBER' => 5,
+        'CONTROL_ROOM' => 1,
+        'STATION_OFFICER' => 2,
+        'DRIVER' => 4,
     ];
 
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $actor->loadMissing(['roles.permissions', 'fireStations', 'managedFireStations']);
         $stations = $this->availableStations($actor);
         $stationIds = $stations->modelKeys();
+        $stationIdCollection = collect($stationIds);
+        $actorLevel = $this->highestRoleLevel($actor);
         $query = User::query()->with([
             'roles',
             'fireStations' => fn (Builder|Relation $builder) => $builder->whereIn('fire_stations.id', $stationIds),
@@ -50,7 +56,7 @@ class UserManagementController extends Controller
 
         $users = $query->orderBy('name')->paginate(15)->withQueryString();
         $manageableUserIds = $users->getCollection()
-            ->filter(fn (User $user) => $this->canManageUser($actor, $user))
+            ->filter(fn (User $user) => $this->canManageUser($actor, $user, $actorLevel, $stationIdCollection))
             ->modelKeys();
 
         return view('users.index', [
@@ -223,22 +229,26 @@ class UserManagementController extends Controller
             || $target->managedFireStations()->whereIn('id', $stationIds)->exists();
     }
 
-    private function canManageUser(User $actor, User $target): bool
-    {
+    private function canManageUser(
+        User $actor,
+        User $target,
+        ?int $actorLevel = null,
+        ?Collection $stationIds = null,
+    ): bool {
         if ($target->id === $actor->id || ! $actor->hasPermission('users.manage')) {
             return false;
         }
 
-        $actorLevel = $this->highestRoleLevel($actor);
+        $actorLevel ??= $this->highestRoleLevel($actor);
         $targetRoles = $target->relationLoaded('roles')
             ? $target->roles->pluck('code')
             : $target->roles()->pluck('code');
 
         $hasLowerRole = $targetRoles->isEmpty()
             ? $actorLevel === 0
-            : $targetRoles->every(fn (string $code) => (self::ROLE_LEVELS[$code] ?? 0) > $actorLevel);
+            : $targetRoles->every(fn (string $code) => (self::ROLE_LEVELS[$code] ?? ($actorLevel === 0 ? 1 : 0)) > $actorLevel);
 
-        return $hasLowerRole && $this->userIsInScope($actor, $target);
+        return $hasLowerRole && $this->userIsInScope($actor, $target, $stationIds);
     }
 
     private function assertExistingStationsInScope(User $actor, User $target): void
@@ -250,13 +260,13 @@ class UserManagementController extends Controller
         abort_unless($this->userIsInScope($actor, $target), 404);
     }
 
-    private function userIsInScope(User $actor, User $target): bool
+    private function userIsInScope(User $actor, User $target, ?Collection $stationIds = null): bool
     {
         if ($this->canViewAllUsers($actor)) {
             return true;
         }
 
-        $allowed = $this->availableStations($actor)->modelKeys();
+        $allowed = $stationIds ?? $this->availableStations($actor)->modelKeys();
         $assigned = $this->userStationIds($target);
 
         return $assigned->isNotEmpty() && $assigned->diff($allowed)->isEmpty();
@@ -296,9 +306,7 @@ class UserManagementController extends Controller
         $query = FireStation::query()->orderBy('name');
 
         if (! $this->canViewAllUsers($actor)) {
-            $query->whereKey($actor->fireStations()->pluck('fire_stations.id')
-                ->merge($actor->managedFireStations()->pluck('id'))
-                ->unique());
+            $query->whereKey($this->userStationIds($actor));
         }
 
         return $query->get(['id', 'code', 'name']);
@@ -308,12 +316,17 @@ class UserManagementController extends Controller
     {
         $level = $this->highestRoleLevel($actor);
 
-        return Role::query()
+        $roles = Role::query()
             ->whereIn('code', collect(self::ROLE_LEVELS)
                 ->filter(fn (int $roleLevel) => $roleLevel > $level)
                 ->keys())
-            ->orderByRaw('CASE code WHEN \'FIRE_STATION_ADMIN\' THEN 1 WHEN \'DISPATCH_OPERATOR\' THEN 2 WHEN \'REPORT_VIEWER\' THEN 3 WHEN \'VEHICLE_DRIVER\' THEN 4 WHEN \'TEAM_MEMBER\' THEN 5 ELSE 0 END')
-            ->get();
+            ->when(
+                $actor->hasRole('SUPER_ADMIN'),
+                fn (Builder $query) => $query->orWhere('is_system', false),
+            )
+            ->orderByRaw('CASE code WHEN \'FIRE_STATION_ADMIN\' THEN 1 WHEN \'DISPATCH_OPERATOR\' THEN 2 WHEN \'REPORT_VIEWER\' THEN 3 WHEN \'VEHICLE_DRIVER\' THEN 4 WHEN \'TEAM_MEMBER\' THEN 5 ELSE 0 END');
+
+        return $roles->get();
     }
 
     private function highestRoleLevel(User $user): int

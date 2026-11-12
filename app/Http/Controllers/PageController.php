@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmergencyJob;
 use App\Models\FireStation;
+use App\Models\JobAssignment;
 use App\Models\JobCallLog;
 use App\Models\JobStatusHistory;
 use App\Models\Permission;
@@ -12,17 +13,26 @@ use App\Models\Team;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Ward;
+use App\Notifications\DriverAssignmentActionAlert;
+use App\Services\VehicleDisplayStatus;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class PageController extends Controller
 {
     public function dashboard(Request $request)
     {
         $user = $request->user();
+        $user?->loadMissing('roles.permissions');
         abort_if($user && ! $user->hasPermission('dashboard.view'), 403);
+        $canViewIncidentMap = ($user?->hasPermission('gps.view') ?? false)
+            && ($user?->hasPermission('jobs.view') ?? false);
 
         if (! $user) {
             return view('pages.dashboard', [
@@ -35,6 +45,9 @@ class PageController extends Controller
                     'permissions' => 0,
                     'vehicles' => 0,
                     'available_vehicles' => 0,
+                    'on_road_vehicles' => 0,
+                    'off_road_vehicles' => 0,
+                    'on_site_vehicles' => 0,
                     'teams' => 0,
                     'active_jobs' => 0,
                     'pending_jobs' => 0,
@@ -42,13 +55,19 @@ class PageController extends Controller
                     'transferred_jobs' => 0,
                     'total_jobs' => 0,
                 ],
-                'stations' => collect(),
+                'dashboardVehicles' => collect(),
                 'recentJobs' => collect(),
-                'activityItems' => collect(),
-                'wardStats' => collect(),
-                'mapMarkers' => collect(),
-                'selectedJob' => null,
-                'canViewJobs' => false,
+                'liveMapData' => ['incidents' => [], 'vehicles' => [], 'center' => null],
+                'mapWards' => collect(),
+                'mapWardId' => null,
+                'canViewIncidentMap' => false,
+                'incidentFilter' => 'open',
+                'incidentFilterCounts' => collect(),
+                'incidentSearch' => '',
+                'helpRequests' => collect(),
+                'vehicleFilter' => 'all',
+                'vehicleFilterCounts' => collect(),
+                'vehicleSearch' => '',
                 'preview' => true,
             ]);
         }
@@ -61,20 +80,6 @@ class PageController extends Controller
         $stationsQuery = FireStation::query();
         $wardsQuery = Ward::query()->where('is_active', true);
         $usersQuery = User::query()->where('is_active', true);
-        $stationCountRelations = [
-            'wards as wards_count' => fn (Builder $query) => $query->where('wards.is_active', true),
-            'users as active_staff_count' => fn (Builder $query) => $query->where('users.is_active', true),
-        ];
-
-        if ($canViewVehicles) {
-            $stationCountRelations['vehicles as available_vehicles_count'] = fn (Builder $query) => $query
-                ->where('vehicles.status', Vehicle::STATUS_AVAILABLE);
-        }
-
-        if ($canViewTeams) {
-            $stationCountRelations['teams as active_teams_count'] = fn (Builder $query) => $query
-                ->whereIn('teams.status', ['AVAILABLE', 'DEPLOYED']);
-        }
 
         if (! $allStations) {
             $stationsQuery->whereKey($stationIds);
@@ -95,18 +100,7 @@ class PageController extends Controller
             );
         }
 
-        $stations = $stationsQuery
-            ->withCount($stationCountRelations)
-            ->orderBy('name')
-            ->get([
-                'id',
-                'code',
-                'name',
-                'address',
-                'latitude',
-                'longitude',
-                'is_active',
-            ]);
+        $stations = $stationsQuery->get(['id', 'is_active', 'latitude', 'longitude']);
         $vehiclesQuery = Vehicle::query();
         $teamsQuery = Team::query();
         $jobsQuery = $this->visibleJobs($user);
@@ -116,142 +110,324 @@ class PageController extends Controller
             $teamsQuery->whereIn('fire_station_id', $stationIds);
         }
 
+        $validated = $request->validate([
+            'incident_search' => ['nullable', 'string', 'max:100'],
+            'vehicle_search' => ['nullable', 'string', 'max:100'],
+            'vehicle_filter' => ['nullable', 'in:all,on_road,off_road,assigned,idle,at_incident'],
+            'map_ward_id' => ['nullable', 'integer', 'exists:wards,id'],
+        ]);
+        $incidentSearch = trim($validated['incident_search'] ?? '');
+        $vehicleSearch = trim($validated['vehicle_search'] ?? '');
+        $vehicleFilter = $validated['vehicle_filter'] ?? 'all';
+        $mapWardId = isset($validated['map_ward_id']) ? (int) $validated['map_ward_id'] : null;
+        $vehicleColumns = [
+            'id',
+            'fire_station_id',
+            'vehicle_number',
+            'vehicle_type',
+            'status',
+            'latitude',
+            'longitude',
+        ];
+        if (Schema::hasColumn('vehicles', 'operational_status')) {
+            $vehicleColumns[] = 'operational_status';
+        }
+
+        $dashboardVehicles = $canViewVehicles
+            ? (clone $vehiclesQuery)
+                ->withCount([
+                    'assignments as open_tickets_count' => fn (Builder $assignments) => $assignments
+                        ->whereNull('released_at')
+                        ->whereHas(
+                            'emergencyJob',
+                            fn (Builder $jobs) => $jobs->whereNotIn('status', [
+                                EmergencyJob::STATUS_COMPLETED,
+                                EmergencyJob::STATUS_DUPLICATE,
+                                EmergencyJob::STATUS_TRANSFERRED_TO_112,
+                            ]),
+                        ),
+                ])
+                ->with([
+                    'fireStation:id,name',
+                    'latestGpsLog',
+                    'assignments' => fn (HasMany $assignments) => $assignments
+                        ->whereNull('released_at')
+                        ->latest('assigned_at')
+                        ->with([
+                            'emergencyJob.ward:id,name',
+                            'statusHistory' => fn (HasMany $history) => $history
+                                ->whereIn('new_status', [
+                                    JobAssignment::STATUS_ARRIVED,
+                                    JobAssignment::STATUS_IN_PROGRESS,
+                                ])
+                                ->orderBy('changed_at'),
+                        ]),
+                ])
+                ->when(
+                    $vehicleFilter === 'on_road',
+                    fn (Builder $query) => $query->whereHas(
+                        'assignments',
+                        fn (Builder $assignments) => $assignments
+                            ->whereNull('released_at')
+                            ->where('status', JobAssignment::STATUS_EN_ROUTE),
+                    ),
+                )
+                ->when(
+                    $vehicleFilter === 'off_road',
+                    fn (Builder $query) => $query->where('status', Vehicle::STATUS_MAINTENANCE),
+                )
+                ->when(
+                    $vehicleFilter === 'assigned',
+                    fn (Builder $query) => $query->whereHas(
+                        'assignments',
+                        fn (Builder $assignments) => $assignments
+                            ->whereNull('released_at')
+                            ->where('status', JobAssignment::STATUS_ASSIGNED),
+                    ),
+                )
+                ->when(
+                    $vehicleFilter === 'idle',
+                    fn (Builder $query) => $query->where('status', Vehicle::STATUS_AVAILABLE),
+                )
+                ->when(
+                    $vehicleFilter === 'at_incident',
+                    fn (Builder $query) => $query->whereHas(
+                        'assignments',
+                        fn (Builder $assignments) => $assignments
+                            ->whereNull('released_at')
+                            ->whereIn('status', [
+                                JobAssignment::STATUS_ARRIVED,
+                                JobAssignment::STATUS_IN_PROGRESS,
+                            ]),
+                    ),
+                )
+                ->when($vehicleSearch !== '', function (Builder $query) use ($vehicleSearch): void {
+                    $query->where(function (Builder $searchQuery) use ($vehicleSearch): void {
+                        $searchQuery->whereLike('vehicle_number', '%'.$vehicleSearch.'%')
+                            ->orWhereLike('vehicle_type', '%'.$vehicleSearch.'%')
+                            ->orWhereLike('status', '%'.$vehicleSearch.'%')
+                            ->orWhereHas(
+                                'fireStation',
+                                fn (Builder $station) => $station->whereLike('name', '%'.$vehicleSearch.'%'),
+                            );
+                    });
+                })
+                ->orderBy('vehicle_number')
+                ->paginate(5, $vehicleColumns, 'vehicles_page')
+                ->appends($request->except('vehicles_page'))
+            : collect();
+
         $pendingStatuses = [EmergencyJob::STATUS_RECEIVED, EmergencyJob::STATUS_ASSIGNED];
         $activeStatuses = [EmergencyJob::STATUS_EN_ROUTE, EmergencyJob::STATUS_ARRIVED, EmergencyJob::STATUS_IN_PROGRESS];
-        $activeJobsQuery = (clone $jobsQuery)->whereIn('status', $activeStatuses);
+        $closedStatuses = [
+            EmergencyJob::STATUS_COMPLETED,
+            EmergencyJob::STATUS_DUPLICATE,
+            EmergencyJob::STATUS_TRANSFERRED_TO_112,
+        ];
+        $incidentFilter = $request->query('status_filter', 'open');
+        $incidentFilterStatuses = [
+            'open' => null,
+            'closed' => $closedStatuses,
+            'pending' => $pendingStatuses,
+            'on_site' => [EmergencyJob::STATUS_ARRIVED, EmergencyJob::STATUS_IN_PROGRESS],
+            'en_route' => [EmergencyJob::STATUS_EN_ROUTE],
+        ];
+        $activeWardsCount = $canViewJobs
+            ? (clone $wardsQuery)->count()
+            : 0;
+        $jobStatusCounts = $canViewJobs
+            ? (clone $jobsQuery)->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status')
+            : collect();
+        $incidentFilterCounts = collect([
+            'open' => max(0, (int) $jobStatusCounts->sum() - (int) $jobStatusCounts->only($closedStatuses)->sum()),
+            'closed' => (int) $jobStatusCounts->only($closedStatuses)->sum(),
+            'pending' => (int) $jobStatusCounts->only($pendingStatuses)->sum(),
+            'on_site' => (int) $jobStatusCounts->only([
+                EmergencyJob::STATUS_ARRIVED,
+                EmergencyJob::STATUS_IN_PROGRESS,
+            ])->sum(),
+            'en_route' => (int) ($jobStatusCounts[EmergencyJob::STATUS_EN_ROUTE] ?? 0),
+        ]);
+        $helpRequests = $canViewJobs ? $this->recentHelpRequests($user) : collect();
+
+        if (! is_string($incidentFilter) || ! array_key_exists($incidentFilter, $incidentFilterStatuses)) {
+            $incidentFilter = 'open';
+        }
+
         $recentJobs = $canViewJobs
-            ? (clone $jobsQuery)->with('ward')->orderByDesc('occurred_at')->limit(6)->get()
-            : collect();
-        $selectedJobId = $canViewJobs
-            ? (clone $activeJobsQuery)->orderByDesc('occurred_at')->value('id')
-                ?? (clone $jobsQuery)->orderByDesc('occurred_at')->value('id')
-            : null;
-        $selectedJob = $selectedJobId
-            ? (clone $jobsQuery)->with([
-                'ward',
-                'assignments.fireStation',
-                'assignments.vehicle',
-                'assignments.team',
-                'statusHistory',
-            ])->find($selectedJobId)
-            : null;
-        $pendingByWard = $canViewJobs
-            ? (clone $jobsQuery)->whereIn('status', $pendingStatuses)
-                ->whereNotNull('ward_id')
-                ->selectRaw('ward_id, COUNT(*) AS aggregate')
-                ->groupBy('ward_id')
-                ->pluck('aggregate', 'ward_id')
-            : collect();
-        $activeByWard = $canViewJobs
-            ? (clone $jobsQuery)->whereIn('status', $activeStatuses)
-                ->whereNotNull('ward_id')
-                ->selectRaw('ward_id, COUNT(*) AS aggregate')
-                ->groupBy('ward_id')
-                ->pluck('aggregate', 'ward_id')
-            : collect();
-        $wardStats = $canViewJobs
-            ? (clone $wardsQuery)->orderBy('name')->get(['id', 'name', 'code'])
-                ->map(fn (Ward $ward): array => [
-                    'ward' => $ward,
-                    'pending' => (int) ($pendingByWard[$ward->id] ?? 0),
-                    'active' => (int) ($activeByWard[$ward->id] ?? 0),
+            ? (clone $jobsQuery)
+                ->with([
+                    'ward',
+                    'assignments' => fn (HasMany $query) => $query
+                        ->latest('assigned_at')
+                        ->with(['fireStation:id,name', 'vehicle:id,vehicle_number']),
                 ])
+                ->when(
+                    $incidentFilter === 'open',
+                    fn (Builder $query) => $query->whereNotIn('status', $closedStatuses),
+                    fn (Builder $query) => $query->whereIn('status', $incidentFilterStatuses[$incidentFilter]),
+                )
+                ->when($mapWardId !== null, fn (Builder $query) => $query->where('ward_id', $mapWardId))
+                ->when($incidentSearch !== '', function (Builder $query) use ($incidentSearch): void {
+                    $query->where(function (Builder $searchQuery) use ($incidentSearch): void {
+                        $searchQuery->whereLike('job_id', '%'.$incidentSearch.'%')
+                            ->orWhereLike('caller_name', '%'.$incidentSearch.'%')
+                            ->orWhereLike('caller_phone', '%'.$incidentSearch.'%')
+                            ->orWhereLike('incident_type', '%'.$incidentSearch.'%')
+                            ->orWhereLike('incident_address', '%'.$incidentSearch.'%')
+                            ->orWhereHas(
+                                'ward',
+                                fn (Builder $ward) => $ward->whereLike('name', '%'.$incidentSearch.'%'),
+                            )
+                            ->orWhereHas(
+                                'assignments.vehicle',
+                                fn (Builder $vehicle) => $vehicle->whereLike('vehicle_number', '%'.$incidentSearch.'%'),
+                            );
+                    });
+                })
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->paginate(8, ['emergency_jobs.*'], 'incidents_page')
+                ->appends($request->except('incidents_page'))
             : collect();
-        $mapMarkers = collect();
-
-        foreach ($stations as $station) {
-            if ($station->latitude !== null && $station->longitude !== null) {
-                $mapMarkers->push([
-                    'kind' => 'station',
-                    'label' => $station->code,
-                    'latitude' => (float) $station->latitude,
-                    'longitude' => (float) $station->longitude,
-                ]);
-            }
-        }
-
-        if ($canViewJobs) {
-            foreach ((clone $activeJobsQuery)->whereNotNull('latitude')->whereNotNull('longitude')
-                ->orderByDesc('occurred_at')->limit(12)->get(['job_id', 'latitude', 'longitude']) as $job) {
-                $mapMarkers->push([
-                    'kind' => 'incident',
-                    'label' => $job->job_id,
-                    'latitude' => (float) $job->latitude,
-                    'longitude' => (float) $job->longitude,
-                ]);
-            }
-        }
-
-        if ($canViewVehicles) {
-            foreach ((clone $vehiclesQuery)->whereNotNull('latitude')->whereNotNull('longitude')
-                ->orderBy('vehicle_number')->limit(12)->get(['vehicle_number', 'latitude', 'longitude']) as $vehicle) {
-                $mapMarkers->push([
-                    'kind' => 'vehicle',
-                    'label' => $vehicle->vehicle_number,
-                    'latitude' => (float) $vehicle->latitude,
-                    'longitude' => (float) $vehicle->longitude,
-                ]);
-            }
-        }
-
-        if ($mapMarkers->isNotEmpty()) {
-            $minLatitude = $mapMarkers->min('latitude');
-            $maxLatitude = $mapMarkers->max('latitude');
-            $minLongitude = $mapMarkers->min('longitude');
-            $maxLongitude = $mapMarkers->max('longitude');
-            $latitudeRange = max($maxLatitude - $minLatitude, 0.0001);
-            $longitudeRange = max($maxLongitude - $minLongitude, 0.0001);
-            $mapMarkers = $mapMarkers->map(function (array $marker) use (
-                $minLatitude,
-                $minLongitude,
-                $latitudeRange,
-                $longitudeRange,
-            ): array {
-                $marker['x'] = round(12 + (($marker['longitude'] - $minLongitude) / $longitudeRange * 76), 2);
-                $marker['y'] = round(12 + (1 - (($marker['latitude'] - $minLatitude) / $latitudeRange)) * 76, 2);
-
-                return $marker;
-            });
-        }
+        $incidentMapJobs = $recentJobs instanceof LengthAwarePaginator
+            ? $recentJobs->getCollection()
+            : $recentJobs;
+        $mapWards = $canViewIncidentMap
+            ? (clone $wardsQuery)->orderBy('name')->get(['id', 'name'])
+            : collect();
+        $mapStation = $stations->first(
+            fn (FireStation $station): bool => $station->latitude !== null && $station->longitude !== null,
+        );
+        $liveMapData = $this->liveMapData(
+            $incidentMapJobs,
+            $dashboardVehicles,
+            $canViewVehicles,
+            $mapStation ? [(float) $mapStation->latitude, (float) $mapStation->longitude] : null,
+        );
+        $vehicleCounts = $canViewVehicles
+            ? (clone $vehiclesQuery)->selectRaw(
+                'COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS available',
+                [Vehicle::STATUS_AVAILABLE],
+            )->first()
+            : null;
+        $onRoadVehicleCount = $canViewVehicles
+            ? (clone $vehiclesQuery)->whereHas(
+                'assignments',
+                fn (Builder $assignments) => $assignments
+                    ->whereNull('released_at')
+                    ->where('status', JobAssignment::STATUS_EN_ROUTE),
+            )->count()
+            : null;
+        $onSiteVehicleCount = $canViewVehicles
+            ? (clone $vehiclesQuery)->whereHas(
+                'assignments',
+                fn (Builder $assignments) => $assignments
+                    ->whereNull('released_at')
+                    ->whereIn('status', [
+                        JobAssignment::STATUS_ARRIVED,
+                        JobAssignment::STATUS_IN_PROGRESS,
+                    ]),
+            )->count()
+            : null;
+        $assignedVehicleCount = $canViewVehicles
+            ? (clone $vehiclesQuery)->whereHas(
+                'assignments',
+                fn (Builder $assignments) => $assignments
+                    ->whereNull('released_at')
+                    ->where('status', JobAssignment::STATUS_ASSIGNED),
+            )->count()
+            : null;
+        $offRoadVehicleCount = $canViewVehicles
+            ? (clone $vehiclesQuery)->where('status', Vehicle::STATUS_MAINTENANCE)->count()
+            : null;
+        $vehicleFilterCounts = collect([
+            'all' => $vehicleCounts ? (int) $vehicleCounts->total : 0,
+            'on_road' => $onRoadVehicleCount ?? 0,
+            'off_road' => $offRoadVehicleCount ?? 0,
+            'assigned' => $assignedVehicleCount ?? 0,
+            'idle' => $vehicleCounts ? (int) $vehicleCounts->available : 0,
+            'at_incident' => $onSiteVehicleCount ?? 0,
+        ]);
 
         return view('pages.dashboard', [
             'summary' => [
-                'total_stations' => (clone $stationsQuery)->count(),
-                'active_stations' => (clone $stationsQuery)->where('is_active', true)->count(),
-                'active_wards' => $wardsQuery->count(),
+                'total_stations' => $stations->count(),
+                'active_stations' => $stations->where('is_active', true)->count(),
+                'active_wards' => $activeWardsCount,
                 'active_users' => $usersQuery->count(),
                 'system_roles' => Role::query()->where('is_system', true)->count(),
                 'permissions' => Permission::query()->count(),
-                'vehicles' => $canViewVehicles ? (clone $vehiclesQuery)->count() : null,
-                'available_vehicles' => $canViewVehicles
-                    ? (clone $vehiclesQuery)->where('status', Vehicle::STATUS_AVAILABLE)->count()
-                    : null,
+                'vehicles' => $vehicleCounts ? (int) $vehicleCounts->total : null,
+                'available_vehicles' => $vehicleCounts ? (int) $vehicleCounts->available : null,
+                'on_road_vehicles' => $onRoadVehicleCount,
+                'off_road_vehicles' => $offRoadVehicleCount,
+                'on_site_vehicles' => $onSiteVehicleCount,
                 'teams' => $canViewTeams ? (clone $teamsQuery)->count() : null,
-                'active_jobs' => $canViewJobs ? $activeJobsQuery->count() : null,
-                'pending_jobs' => $canViewJobs ? (clone $jobsQuery)->whereIn('status', $pendingStatuses)->count() : null,
-                'completed_jobs' => $canViewJobs
-                    ? (clone $jobsQuery)->where('status', EmergencyJob::STATUS_COMPLETED)->count()
+                'active_jobs' => $canViewJobs
+                    ? (int) $jobStatusCounts->only($activeStatuses)->sum()
                     : null,
+                'pending_jobs' => $canViewJobs
+                    ? (int) $jobStatusCounts->only($pendingStatuses)->sum()
+                    : null,
+                'completed_jobs' => $canViewJobs ? (int) ($jobStatusCounts[EmergencyJob::STATUS_COMPLETED] ?? 0) : null,
                 'transferred_jobs' => $canViewJobs
-                    ? (clone $jobsQuery)->where('status', EmergencyJob::STATUS_TRANSFERRED_TO_112)->count()
+                    ? (int) ($jobStatusCounts[EmergencyJob::STATUS_TRANSFERRED_TO_112] ?? 0)
                     : null,
-                'total_jobs' => $canViewJobs ? (clone $jobsQuery)->count() : null,
+                'total_jobs' => $canViewJobs ? (int) $jobStatusCounts->sum() : null,
             ],
-            'stations' => $stations,
+            'dashboardVehicles' => $dashboardVehicles,
             'recentJobs' => $recentJobs,
-            'activityItems' => $canViewJobs ? $this->dashboardActivityItems($user) : collect(),
-            'wardStats' => $wardStats,
-            'mapMarkers' => $mapMarkers,
-            'selectedJob' => $selectedJob,
-            'canViewJobs' => $canViewJobs,
+            'liveMapData' => $liveMapData,
+            'mapWards' => $mapWards,
+            'mapWardId' => $mapWardId,
+            'canViewIncidentMap' => $canViewIncidentMap,
+            'incidentFilter' => $incidentFilter,
+            'incidentFilterCounts' => $incidentFilterCounts,
+            'incidentSearch' => $incidentSearch,
+            'helpRequests' => $helpRequests,
+            'vehicleFilter' => $vehicleFilter,
+            'vehicleFilterCounts' => $vehicleFilterCounts,
+            'vehicleSearch' => $vehicleSearch,
             'preview' => false,
         ]);
+    }
+
+    public function dashboardMapData(Request $request): JsonResponse
+    {
+        $view = $this->dashboard($request);
+
+        return response()->json(['data' => $view->getData()['liveMapData']]);
     }
 
     public function dashboardActivity(Request $request)
     {
         return response()->json([
             'data' => $this->dashboardActivityItems($request->user()),
+        ]);
+    }
+
+    public function dashboardHelpRequests(Request $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->recentHelpRequests($request->user())->map(function ($notification): array {
+                $alert = $notification->data;
+
+                return [
+                    'help_type' => $alert['help_type'] ?? null,
+                    'reason' => $alert['reason'] ?? null,
+                    'comments' => $alert['comments'] ?? null,
+                    'driver_name' => $alert['driver_name'] ?? null,
+                    'team_name' => $alert['team_name'] ?? null,
+                    'vehicle_number' => $alert['vehicle_number'] ?? null,
+                    'job_id' => $alert['job_id'] ?? null,
+                    'incident_url' => ! empty($alert['incident_id'])
+                        ? route('app.jobs.show', $alert['incident_id'])
+                        : null,
+                    'requested_at' => $alert['requested_at'] ?? $notification->created_at?->toIso8601String(),
+                    'created_at' => $notification->created_at?->toIso8601String(),
+                ];
+            })->values(),
         ]);
     }
 
@@ -297,6 +473,7 @@ class PageController extends Controller
             'records' => $records,
             'canManage' => $user?->hasPermission($kind.'.manage') ?? false,
             'canCreate' => $kind === 'jobs' && ($user?->hasPermission('jobs.create') ?? false),
+            'canManageRoles' => $kind === 'roles' && ($user?->hasPermission('roles.manage') ?? false),
         ]);
     }
 
@@ -371,7 +548,27 @@ class PageController extends Controller
 
     private function vehicleCatalog(User $user, string $search)
     {
-        $query = Vehicle::query()->with('fireStation:id,name,code');
+        $query = Vehicle::query()
+            ->with([
+                'fireStation:id,name,code',
+                'latestGpsLog',
+                'assignments' => fn (HasMany $assignments) => $assignments
+                    ->whereNull('released_at')
+                    ->latest('assigned_at')
+                    ->with('emergencyJob:id,status'),
+            ])
+            ->withCount([
+                'assignments as open_tickets_count' => fn (Builder $assignments) => $assignments
+                    ->whereNull('released_at')
+                    ->whereHas(
+                        'emergencyJob',
+                        fn (Builder $jobs) => $jobs->whereNotIn('status', [
+                            EmergencyJob::STATUS_COMPLETED,
+                            EmergencyJob::STATUS_DUPLICATE,
+                            EmergencyJob::STATUS_TRANSFERRED_TO_112,
+                        ]),
+                    ),
+            ]);
 
         if (! $this->canViewAllStations($user)) {
             $query->whereIn('fire_station_id', $this->stationIds($user));
@@ -446,6 +643,90 @@ class PageController extends Controller
     }
 
     /**
+     * @param  array{0: float, 1: float}|null  $mapCenter
+     * @return array{incidents: array<int, array<string, mixed>>, vehicles: array<int, array<string, mixed>>, center: array{0: float, 1: float}|null}
+     */
+    private function liveMapData(
+        Collection $jobs,
+        LengthAwarePaginator|Collection $vehicles,
+        bool $canViewVehicles,
+        ?array $mapCenter,
+    ): array {
+        $incidents = $jobs
+            ->map(fn (EmergencyJob $job): array => [
+                'id' => (int) $job->id,
+                'job_id' => $job->job_id,
+                'type' => str_replace('_', ' ', $job->incident_type),
+                'description' => $job->remarks ?: str_replace('_', ' ', $job->incident_type),
+                'priority' => strtoupper($job->priority),
+                'status' => str_replace('_', ' ', $job->status),
+                'status_code' => strtoupper($job->status),
+                'latitude' => $job->latitude === null ? null : (float) $job->latitude,
+                'longitude' => $job->longitude === null ? null : (float) $job->longitude,
+                'location' => $job->incident_address,
+                'ward_id' => $job->ward_id === null ? null : (int) $job->ward_id,
+                'ward' => $job->ward?->name,
+                'caller_name' => $job->caller_name,
+                'caller_phone' => $job->caller_phone,
+                'vehicle_number' => $job->assignments->first()?->vehicle?->vehicle_number,
+                'occurred_at' => $job->occurred_at?->toIso8601String(),
+                'elapsed_seconds' => $job->occurred_at ? max(0, (int) $job->occurred_at->diffInSeconds(now())) : null,
+                'view_url' => route('app.jobs.show', $job),
+            ])
+            ->values()
+            ->all();
+
+        $vehicleRows = $canViewVehicles
+            ? ($vehicles instanceof LengthAwarePaginator ? $vehicles->getCollection() : $vehicles)
+            : collect();
+
+        $vehicleData = $vehicleRows
+            ->map(function (Vehicle $vehicle): array {
+                $assignment = $vehicle->assignments->first();
+                $job = $assignment?->emergencyJob;
+                $gpsLog = $vehicle->latestGpsLog;
+                $latitude = $gpsLog?->latitude ?? $vehicle->latitude;
+                $longitude = $gpsLog?->longitude ?? $vehicle->longitude;
+                $status = VehicleDisplayStatus::describe($vehicle, $assignment);
+                $arrival = $assignment?->statusHistory->firstWhere('new_status', JobAssignment::STATUS_ARRIVED);
+                $workStart = $assignment?->statusHistory->firstWhere('new_status', JobAssignment::STATUS_IN_PROGRESS);
+
+                return [
+                    'id' => (int) $vehicle->id,
+                    'number' => $vehicle->vehicle_number,
+                    'status_code' => $status['code'],
+                    'status' => $status['label'],
+                    'latitude' => $latitude === null ? null : (float) $latitude,
+                    'longitude' => $longitude === null ? null : (float) $longitude,
+                    'ward_id' => $job?->ward_id === null ? null : (int) $job->ward_id,
+                    'ward' => $job?->ward?->name,
+                    'incident_id' => $job?->job_id,
+                    'incident_url' => $job ? route('app.jobs.show', $job) : null,
+                    'destination' => $job?->incident_address,
+                    'incident_latitude' => $job?->latitude === null ? null : (float) $job->latitude,
+                    'incident_longitude' => $job?->longitude === null ? null : (float) $job->longitude,
+                    'current_location' => $latitude !== null && $longitude !== null
+                        ? number_format((float) $latitude, 5).', '.number_format((float) $longitude, 5)
+                        : null,
+                    'speed_kph' => $gpsLog?->speed_kph === null ? null : (float) $gpsLog->speed_kph,
+                    'last_gps_at' => $gpsLog?->recorded_at?->toIso8601String(),
+                    'gps_stale' => $gpsLog?->recorded_at?->lt(now()->subMinutes(5)) ?? false,
+                    'assigned_at' => $assignment?->assigned_at?->toIso8601String(),
+                    'arrived_at' => $arrival?->changed_at?->toIso8601String(),
+                    'working_since' => $workStart?->changed_at?->toIso8601String(),
+                    'elapsed_seconds' => $status['code'] === 'AT_INCIDENT' && $workStart?->changed_at
+                        ? max(0, (int) $workStart->changed_at->diffInSeconds(now()))
+                        : null,
+                    'view_url' => url('/vehicles/'.$vehicle->id),
+                ];
+            })
+            ->values()
+            ->all();
+
+        return ['incidents' => $incidents, 'vehicles' => $vehicleData, 'center' => $mapCenter];
+    }
+
+    /**
      * @return Collection<int, int>
      */
     private function stationIds(User $user): Collection
@@ -461,9 +742,27 @@ class PageController extends Controller
         return $user->hasRole('SUPER_ADMIN') || $user->hasRole('CONTROL_ROOM_ADMIN');
     }
 
+    private function recentHelpRequests(User $user): Collection
+    {
+        return $user->notifications()
+            ->where('type', DriverAssignmentActionAlert::class)
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->filter(fn ($notification): bool => ($notification->data['action'] ?? null) === 'need_help')
+            ->take(5)
+            ->values();
+    }
+
     private function visibleJobs(User $user): Builder
     {
         $jobs = EmergencyJob::query();
+
+        if ($user->hasRole('VEHICLE_DRIVER')) {
+            return $jobs->whereHas('assignments', fn (Builder $assignments) => $assignments
+                ->whereNull('released_at')
+                ->where('assigned_driver_user_id', $user->id));
+        }
 
         if (! $this->canViewAllStations($user)) {
             $stationIds = $this->stationIds($user);

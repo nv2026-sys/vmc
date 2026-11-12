@@ -17,6 +17,7 @@ class AssignJobResourcesRequest extends FormRequest
             'assignments' => ['required', 'array', 'min:1', 'max:10'],
             'assignments.*.fire_station_id' => ['required', 'integer', 'exists:fire_stations,id'],
             'assignments.*.vehicle_id' => ['required', 'integer', 'exists:vehicles,id'],
+            'assignments.*.driver_user_id' => ['required', 'integer', 'exists:users,id'],
             'assignments.*.team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'remarks' => ['nullable', 'string', 'max:2000'],
         ];

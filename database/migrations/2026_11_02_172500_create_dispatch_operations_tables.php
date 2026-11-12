@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -10,11 +11,11 @@ return new class extends Migration
     {
         Schema::create('vehicles', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('fire_station_id')->constrained()->restrictOnDelete();
+            $table->foreignId('fire_station_id')->constrained();
             $table->string('vehicle_number', 40)->unique();
             $table->string('vehicle_type', 40);
-            $table->string('registration_number', 40)->nullable()->unique();
-            $table->string('gps_device_id', 100)->nullable()->unique();
+            $table->string('registration_number', 40)->nullable();
+            $table->string('gps_device_id', 100)->nullable();
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
             $table->string('status', 30)->default('AVAILABLE')->index();
@@ -24,9 +25,19 @@ return new class extends Migration
             $table->index(['fire_station_id', 'status']);
         });
 
+        if (DB::connection()->getDriverName() === 'sqlsrv') {
+            DB::statement('CREATE UNIQUE INDEX vehicles_registration_number_unique ON vehicles (registration_number) WHERE registration_number IS NOT NULL');
+            DB::statement('CREATE UNIQUE INDEX vehicles_gps_device_id_unique ON vehicles (gps_device_id) WHERE gps_device_id IS NOT NULL');
+        } else {
+            Schema::table('vehicles', function (Blueprint $table) {
+                $table->unique('registration_number');
+                $table->unique('gps_device_id');
+            });
+        }
+
         Schema::create('teams', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('fire_station_id')->constrained()->restrictOnDelete();
+            $table->foreignId('fire_station_id')->constrained();
             $table->foreignId('leader_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('name');
             $table->string('contact_number', 32)->nullable();
@@ -73,7 +84,7 @@ return new class extends Migration
         Schema::create('job_call_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('emergency_job_id')->constrained()->cascadeOnDelete();
-            $table->string('call_reference', 100)->nullable()->unique();
+            $table->string('call_reference', 100)->nullable();
             $table->string('caller_name');
             $table->string('caller_phone', 32);
             $table->string('call_source', 40)->default('PHONE');
@@ -84,14 +95,23 @@ return new class extends Migration
             $table->index(['emergency_job_id', 'received_at']);
         });
 
+        if (DB::connection()->getDriverName() === 'sqlsrv') {
+            DB::statement('CREATE UNIQUE INDEX job_call_logs_call_reference_unique ON job_call_logs (call_reference) WHERE call_reference IS NOT NULL');
+        } else {
+            Schema::table('job_call_logs', function (Blueprint $table) {
+                $table->unique('call_reference');
+            });
+        }
+
         Schema::create('job_assignments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('emergency_job_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('fire_station_id')->constrained()->restrictOnDelete();
-            $table->foreignId('vehicle_id')->constrained()->restrictOnDelete();
+            $table->foreignId('fire_station_id')->constrained();
+            $table->foreignId('vehicle_id')->constrained();
             $table->foreignId('team_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('team_leader_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('assigned_by')->nullable()->constrained('users')->nullOnDelete();
+            // Keep user references non-cascading because SQL Server cannot cascade twice from users.
+            $table->foreignId('team_leader_user_id')->nullable()->constrained('users');
+            $table->foreignId('assigned_by')->nullable()->constrained('users');
             $table->timestampTz('assigned_at')->index();
             $table->timestampTz('released_at')->nullable();
             $table->string('status', 30)->default('ASSIGNED')->index();
@@ -105,7 +125,8 @@ return new class extends Migration
         Schema::create('job_status_history', function (Blueprint $table) {
             $table->id();
             $table->foreignId('emergency_job_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('job_assignment_id')->nullable()->constrained('job_assignments')->nullOnDelete();
+            // The parent job already cascades to both tables; avoid a second cascade path.
+            $table->foreignId('job_assignment_id')->nullable()->constrained('job_assignments');
             $table->string('previous_status', 40)->nullable();
             $table->string('new_status', 40);
             $table->foreignId('changed_by')->nullable()->constrained('users')->nullOnDelete();

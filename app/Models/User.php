@@ -94,11 +94,23 @@ class User extends Authenticatable
 
     public function hasRole(string $code): bool
     {
+        if ($this->relationLoaded('roles')) {
+            return $this->roles->contains('code', $code);
+        }
+
         return $this->roles()->where('code', $code)->exists();
     }
 
     public function hasPermission(string $code): bool
     {
+        if ($this->relationLoaded('roles')
+            && $this->roles->every(static fn (Role $role): bool => $role->relationLoaded('permissions'))) {
+            return $this->roles->contains(
+                static fn (Role $role): bool => $role->code === 'SUPER_ADMIN'
+                    || $role->permissions->contains('code', $code),
+            );
+        }
+
         return $this->hasRole('SUPER_ADMIN')
             || $this->roles()
                 ->whereHas('permissions', fn ($query) => $query->where('permissions.code', $code))

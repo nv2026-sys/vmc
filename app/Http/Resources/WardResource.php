@@ -15,14 +15,14 @@ class WardResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
+            'id' => (int) $this->id,
             'code' => $this->code,
             'name' => $this->name,
             'description' => $this->description,
             'is_active' => $this->is_active,
             'fire_stations' => $this->whenLoaded('fireStations', fn () => $this->fireStations
                 ->map(fn ($station): array => [
-                    'id' => $station->id,
+                    'id' => (int) $station->id,
                     'name' => $station->name,
                 ])->values()),
             'created_at' => $this->created_at,
