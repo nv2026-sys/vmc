@@ -27,6 +27,7 @@ class DriverAssignmentWorkflow
 
         return $this->assignmentsFor($driver)
             ->whereNull('released_at')
+            ->where('status', '!=', JobAssignment::STATUS_QUEUED)
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->first();
@@ -38,6 +39,7 @@ class DriverAssignmentWorkflow
 
         return $this->assignmentQuery($driver, $identifier)
             ->whereNull('released_at')
+            ->where('status', '!=', JobAssignment::STATUS_QUEUED)
             ->lockForUpdate()
             ->firstOrFail();
     }
@@ -50,7 +52,7 @@ class DriverAssignmentWorkflow
         if ($completed) {
             $query->whereNotNull('released_at');
         } else {
-            $query->whereNull('released_at');
+            $query->whereNull('released_at')->where('status', '!=', JobAssignment::STATUS_QUEUED);
         }
 
         return $query->firstOrFail();
@@ -111,16 +113,41 @@ class DriverAssignmentWorkflow
 
     public function reached(User $driver, string $identifier, array $data): JobAssignment
     {
-        return DB::transaction(function () use ($driver, $identifier, $data): JobAssignment {
+        return $this->markAtIncident($driver, $identifier, $data, JobAssignment::STATUS_ARRIVED);
+    }
+
+    public function started(User $driver, string $identifier, array $data): JobAssignment
+    {
+        return $this->markAtIncident($driver, $identifier, $data, JobAssignment::STATUS_STARTED);
+    }
+
+    private function markAtIncident(User $driver, string $identifier, array $data, string $status): JobAssignment
+    {
+        return DB::transaction(function () use ($driver, $identifier, $data, $status): JobAssignment {
             $assignment = $this->findActiveAssignment($driver, $identifier);
             $changedAt = isset($data['reachedTime']) ? Carbon::parse($data['reachedTime']) : now();
             $this->ensureChronological($assignment, $changedAt);
             $location = $this->recordGps($driver, $assignment, $data, 'reachedLatitude', 'reachedLongitude');
             $this->incidentWorkflow->updateAssignmentStatus($driver, $assignment->emergencyJob, $assignment->id, [
-                'status' => JobAssignment::STATUS_ARRIVED,
-                'remarks' => 'Driver reached the incident location.',
+                'status' => $status,
+                'remarks' => $status === JobAssignment::STATUS_STARTED
+                    ? 'Driver started work at the incident location.'
+                    : 'Driver reached the incident location.',
                 'changed_at' => $changedAt,
                 ...$location,
+            ]);
+
+            return $this->details($driver, (string) $assignment->id);
+        });
+    }
+
+    public function inProgress(User $driver, string $identifier): JobAssignment
+    {
+        return DB::transaction(function () use ($driver, $identifier): JobAssignment {
+            $assignment = $this->findActiveAssignment($driver, $identifier);
+            $this->incidentWorkflow->updateAssignmentStatus($driver, $assignment->emergencyJob, $assignment->id, [
+                'status' => JobAssignment::STATUS_IN_PROGRESS,
+                'remarks' => 'Incident response work started.',
             ]);
 
             return $this->details($driver, (string) $assignment->id);
@@ -164,15 +191,22 @@ class DriverAssignmentWorkflow
         });
     }
 
-    public function complete(User $driver, string $identifier, array $data): JobAssignment
-    {
-        return DB::transaction(function () use ($driver, $identifier, $data): JobAssignment {
+    public function complete(
+        User $driver,
+        string $identifier,
+        array $data,
+        string $finalStatus = JobAssignment::STATUS_COMPLETED,
+    ): JobAssignment {
+        return DB::transaction(function () use ($driver, $identifier, $data, $finalStatus): JobAssignment {
             $assignment = $this->findActiveAssignment($driver, $identifier);
             $location = $this->recordGps($driver, $assignment, $data, 'driverLatitude', 'driverLongitude');
             $changedAt = isset($data['completedAt']) ? Carbon::parse($data['completedAt']) : now();
             $this->ensureChronological($assignment, $changedAt);
 
-            if ($assignment->status === JobAssignment::STATUS_ARRIVED) {
+            if (in_array($assignment->status, [
+                JobAssignment::STATUS_ARRIVED,
+                JobAssignment::STATUS_STARTED,
+            ], true)) {
                 $this->incidentWorkflow->updateAssignmentStatus(
                     $driver,
                     $assignment->emergencyJob,
@@ -191,8 +225,12 @@ class DriverAssignmentWorkflow
                 $assignment->emergencyJob,
                 $assignment->id,
                 [
-                    'status' => JobAssignment::STATUS_COMPLETED,
-                    'remarks' => $data['completionNotes'] ?? 'Driver completed the assignment.',
+                    'status' => $finalStatus,
+                    'remarks' => $data['completionNotes'] ?? (
+                        $finalStatus === JobAssignment::STATUS_WORK_DONE
+                            ? 'Driver marked the assignment work done.'
+                            : 'Driver completed the assignment.'
+                    ),
                     'changed_at' => $changedAt,
                     ...$location,
                 ],
@@ -202,13 +240,17 @@ class DriverAssignmentWorkflow
                 $this->appendRemark(
                     $driver,
                     $assignment,
-                    'Driver action [completed] assignment #'.$assignment->id.': '.$data['completionNotes'],
+                    'Driver action ['.($finalStatus === JobAssignment::STATUS_WORK_DONE
+                        ? 'work_done'
+                        : 'completed').'] assignment #'.$assignment->id.': '.$data['completionNotes'],
                 );
             }
-            $this->recordActionEvent($driver, $assignment, 'completed', [
-                'completion_notes' => $data['completionNotes'] ?? null,
-                'completed_at' => $changedAt->toIso8601String(),
-            ]);
+            $this->recordActionEvent($driver, $assignment, $finalStatus === JobAssignment::STATUS_WORK_DONE
+                ? 'work_done'
+                : 'completed', [
+                    'completion_notes' => $data['completionNotes'] ?? null,
+                    'completed_at' => $changedAt->toIso8601String(),
+                ]);
 
             return $this->details($driver, (string) $assignment->id, true);
         });
@@ -221,9 +263,12 @@ class DriverAssignmentWorkflow
                 ->whereNotNull('released_at')
                 ->lockForUpdate()
                 ->firstOrFail();
-            if ($assignment->status !== JobAssignment::STATUS_COMPLETED) {
+            if (! in_array($assignment->status, [
+                JobAssignment::STATUS_COMPLETED,
+                JobAssignment::STATUS_WORK_DONE,
+            ], true)) {
                 throw ValidationException::withMessages([
-                    'assignment' => 'Only a completed assignment can be closed.',
+                    'assignment' => 'Only a completed or work-done assignment can be closed.',
                 ]);
             }
 
@@ -290,6 +335,8 @@ class DriverAssignmentWorkflow
                 'incident_type' => $assignment->emergencyJob->incident_type,
                 'incident_location' => $assignment->emergencyJob->incident_address,
                 'requested_at' => now()->toIso8601String(),
+                'message' => ($action === 'escalated' ? 'Driver escalation: ' : 'Driver help request: ')
+                    .$details['reason'],
                 ...$details,
             ];
             $recipients->each(fn (User $recipient) => $recipient->notify(

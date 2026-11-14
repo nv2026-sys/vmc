@@ -109,7 +109,10 @@ class VehicleTrackingController extends Controller
             $assignment = $assignmentEntry['assignment'] ?? null;
             $assignedVehicle = $assignmentEntry['vehicle'] ?? null;
             $arrivedAt = $assignment?->statusHistory
-                ->firstWhere('new_status', JobAssignment::STATUS_ARRIVED)?->changed_at;
+                ->first(fn ($entry): bool => in_array($entry->new_status, [
+                    JobAssignment::STATUS_ARRIVED,
+                    JobAssignment::STATUS_STARTED,
+                ], true))?->changed_at;
             $workStartedAt = $assignment?->statusHistory
                 ->firstWhere('new_status', JobAssignment::STATUS_IN_PROGRESS)?->changed_at;
 
@@ -144,7 +147,11 @@ class VehicleTrackingController extends Controller
             $latitude = $gps?->latitude ?? $vehicle->latitude;
             $longitude = $gps?->longitude ?? $vehicle->longitude;
             $status = VehicleDisplayStatus::describe($vehicle, $assignment);
-            $arrivedAt = $assignment?->statusHistory->firstWhere('new_status', JobAssignment::STATUS_ARRIVED)?->changed_at;
+            $arrivedAt = $assignment?->statusHistory
+                ->first(fn ($entry): bool => in_array($entry->new_status, [
+                    JobAssignment::STATUS_ARRIVED,
+                    JobAssignment::STATUS_STARTED,
+                ], true))?->changed_at;
             $workStartedAt = $assignment?->statusHistory->firstWhere('new_status', JobAssignment::STATUS_IN_PROGRESS)?->changed_at;
 
             return [

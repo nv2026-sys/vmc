@@ -20,8 +20,10 @@
         'ASSIGNED' => 'Assigned',
         'EN_ROUTE' => 'En Route',
         'ARRIVED' => 'Arrived',
+        'STARTED' => 'Started',
         'IN_PROGRESS' => 'In Progress',
         'COMPLETED' => 'Completed',
+        'WORK_DONE' => 'Work Done',
         'DUPLICATE' => 'Duplicate',
         'TRANSFERRED_TO_112' => 'Transferred to 112',
     ];

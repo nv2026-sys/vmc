@@ -74,6 +74,11 @@ class ServerRenderedPagesTest extends TestCase
         $otherStation->users()->attach(User::factory()->create()->id);
 
         $this->actingAs($stationAdmin)
+            ->get('/')
+            ->assertOk()
+            ->assertSee('class="operations-dashboard-page operations-dashboard-layout"', false);
+
+        $this->actingAs($stationAdmin)
             ->get('/dashboard')
             ->assertOk()
             ->assertSee('Incident Dashboard')

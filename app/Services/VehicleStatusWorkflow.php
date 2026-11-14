@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 class VehicleStatusWorkflow
 {
-    public function __construct(private readonly AuditLogger $auditLogger) {}
+    public function __construct(
+        private readonly AuditLogger $auditLogger,
+        private readonly IncidentWorkflow $incidentWorkflow,
+    ) {}
 
     public function updateForDriver(User $actor, Vehicle $requestedVehicle, string $status): ?VehicleStatusHistory
     {
@@ -22,7 +25,12 @@ class VehicleStatusWorkflow
             $vehicle = $this->findDriverLinkedVehicle($actor, true);
             abort_unless($vehicle && (int) $vehicle->id === (int) $requestedVehicle->id, 404);
 
-            return $this->setStatus($actor, $vehicle, $status, 'api');
+            $history = $this->setStatus($actor, $vehicle, $status, 'api');
+            if ($status === Vehicle::OPERATIONAL_STATUS_ON_ROAD) {
+                $this->incidentWorkflow->activateQueuedAssignmentsForVehicle($actor, $vehicle);
+            }
+
+            return $history;
         });
     }
 
@@ -53,12 +61,14 @@ class VehicleStatusWorkflow
         $assignment = JobAssignment::query()
             ->where('assigned_driver_user_id', $driver->id)
             ->whereNull('released_at')
+            ->where('status', '!=', JobAssignment::STATUS_QUEUED)
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->first();
 
         $assignment ??= JobAssignment::query()
             ->where('assigned_driver_user_id', $driver->id)
+            ->where('status', '!=', JobAssignment::STATUS_QUEUED)
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->first();

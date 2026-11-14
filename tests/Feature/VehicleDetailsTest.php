@@ -46,6 +46,16 @@ class VehicleDetailsTest extends TestCase
             ->assertSee('View 1 open tickets for '.$vehicle->vehicle_number);
     }
 
+    public function test_vehicle_details_route_opens_from_the_dashboard_vehicle_url(): void
+    {
+        [$admin, , , $vehicle] = $this->vehicleSetup();
+
+        $this->actingAs($admin)
+            ->get('/vehicles/'.$vehicle->id)
+            ->assertOk()
+            ->assertSee($vehicle->vehicle_number);
+    }
+
     public function test_details_page_shows_gps_freshness_assignments_and_closed_tickets_latest_first(): void
     {
         [$admin, $station, $ward, $vehicle] = $this->vehicleSetup();

@@ -37,7 +37,7 @@
     @if ($job->assignments->isNotEmpty() || $canAssign)
         <section class="panel">
             <div class="page-heading">
-                <div><h2>Response units</h2><p class="muted">Each vehicle is assigned and tracked independently.</p></div>
+                <div><h2>Response units</h2><p class="muted">Each vehicle is assigned and tracked independently. Busy vehicle/driver pairs and response teams can be queued; the next assignment activates automatically when current work is released.</p></div>
             </div>
             @if ($job->assignments->isNotEmpty())
                 <div class="table-scroll"><table><thead><tr><th>Vehicle</th><th>Station</th><th>Team</th><th>Assigned by</th><th>Status</th><th>Update status</th></tr></thead><tbody>
@@ -63,8 +63,10 @@
                                                     \App\Models\JobAssignment::STATUS_ASSIGNED => 'Assigned',
                                                     \App\Models\JobAssignment::STATUS_EN_ROUTE => 'En route',
                                                     \App\Models\JobAssignment::STATUS_ARRIVED => 'Arrived',
+                                                    \App\Models\JobAssignment::STATUS_STARTED => 'Started',
                                                     \App\Models\JobAssignment::STATUS_IN_PROGRESS => 'In progress',
                                                     \App\Models\JobAssignment::STATUS_COMPLETED => 'Completed',
+                                                    \App\Models\JobAssignment::STATUS_WORK_DONE => 'Work done',
                                                 ] as $statusValue => $statusLabel)
                                                     <option value="{{ $statusValue }}" @selected($assignment->status === $statusValue)>{{ $statusLabel }}</option>
                                                 @endforeach
@@ -89,7 +91,7 @@
                     <form method="POST" action="{{ route('app.jobs.assignments.store', $job->id) }}" class="managed-user-form incident-form assignment-form">
                         @csrf
                         <h3>Assign one or more units</h3>
-                        <p class="muted">A driver can take another incident on the same vehicle. To use a different vehicle, complete the driver's current assignment first. The station must also cover this incident's ward.</p>
+                        <p class="muted">A busy vehicle and driver can only be queued together as the same pair. Busy response teams can also be queued. Queued work activates automatically when the current assignment finishes. The station must cover this incident's ward.</p>
                         <div id="assignment-rows">
                             <div class="assignment-row form-grid">
                                 <label>Fire station
@@ -100,12 +102,12 @@
                                         @endforeach
                                     </select>
                                 </label>
-                                <label>Available vehicle
+                                <label>Vehicle
                                     <select name="assignments[0][vehicle_id]" data-field="vehicle_id" class="assignment-vehicle" required>
                                         <option value="">Select vehicle</option>
                                         @foreach ($assignableStations as $station)
                                             @foreach ($station->vehicles as $vehicle)
-                                                <option value="{{ $vehicle->id }}" data-station="{{ $station->id }}">{{ $vehicle->vehicle_number }} · {{ str_replace('_', ' ', $vehicle->vehicle_type) }}</option>
+                                                <option value="{{ $vehicle->id }}" data-station="{{ $station->id }}">{{ $vehicle->vehicle_number }} · {{ str_replace('_', ' ', $vehicle->vehicle_type) }}@if ($vehicle->status === \App\Models\Vehicle::STATUS_DEPLOYED) · Busy — may queue @endif</option>
                                             @endforeach
                                         @endforeach
                                     </select>
@@ -120,12 +122,12 @@
                                         @endforeach
                                     </select>
                                 </label>
-                                <label>Response team (optional)
+                                <label>Response team (optional; busy teams queue)
                                     <select name="assignments[0][team_id]" data-field="team_id" class="assignment-team">
                                         <option value="">No team selected</option>
                                         @foreach ($assignableStations as $station)
                                             @foreach ($station->teams as $team)
-                                                <option value="{{ $team->id }}" data-station="{{ $station->id }}">{{ $team->name }}</option>
+                                                <option value="{{ $team->id }}" data-station="{{ $station->id }}">{{ $team->name }}@if ($team->status === \App\Models\Team::STATUS_DEPLOYED) · Busy — will queue @endif</option>
                                             @endforeach
                                         @endforeach
                                     </select>
@@ -146,12 +148,12 @@
                                     @endforeach
                                 </select>
                             </label>
-                            <label>Available vehicle
+                            <label>Vehicle
                                 <select data-field="vehicle_id" class="assignment-vehicle" required>
                                     <option value="">Select vehicle</option>
                                     @foreach ($assignableStations as $station)
                                         @foreach ($station->vehicles as $vehicle)
-                                            <option value="{{ $vehicle->id }}" data-station="{{ $station->id }}">{{ $vehicle->vehicle_number }} · {{ str_replace('_', ' ', $vehicle->vehicle_type) }}</option>
+                                            <option value="{{ $vehicle->id }}" data-station="{{ $station->id }}">{{ $vehicle->vehicle_number }} · {{ str_replace('_', ' ', $vehicle->vehicle_type) }}@if ($vehicle->status === \App\Models\Vehicle::STATUS_DEPLOYED) · Busy — may queue @endif</option>
                                         @endforeach
                                     @endforeach
                                 </select>
@@ -166,12 +168,12 @@
                                     @endforeach
                                 </select>
                             </label>
-                            <label>Response team (optional)
+                            <label>Response team (optional; busy teams queue)
                                 <select data-field="team_id" class="assignment-team">
                                     <option value="">No team selected</option>
                                     @foreach ($assignableStations as $station)
                                         @foreach ($station->teams as $team)
-                                            <option value="{{ $team->id }}" data-station="{{ $station->id }}">{{ $team->name }}</option>
+                                            <option value="{{ $team->id }}" data-station="{{ $station->id }}">{{ $team->name }}@if ($team->status === \App\Models\Team::STATUS_DEPLOYED) · Busy — will queue @endif</option>
                                         @endforeach
                                     @endforeach
                                 </select>

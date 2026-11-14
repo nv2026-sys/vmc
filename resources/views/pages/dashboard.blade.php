@@ -24,24 +24,25 @@
             data-help-requests data-help-requests-endpoint="{{ route('dashboard.help-requests') }}"
             aria-live="polite" @if ($helpRequests->isEmpty()) hidden @endif>
             <div class="ops-panel-heading">
-                <div><h2 id="help-alerts-heading">Driver help requests</h2><p>Urgent requests from assigned response units</p></div>
+                <div><h2 id="help-alerts-heading">Driver alerts</h2><p>Help requests and escalations from response units</p></div>
                 <span class="ops-help-alert-count" data-help-request-count>{{ $helpRequests->count() }} recent</span>
             </div>
             <div class="ops-help-alert-list" data-help-alert-list>
                 @foreach ($helpRequests as $helpRequest)
                     @php($alert = $helpRequest->data)
+                    @php($alertTitle = ($alert['action'] ?? null) === 'escalated' ? 'Driver escalation' : \Illuminate\Support\Str::headline($alert['help_type'] ?? $alert['reason'] ?? 'Help requested'))
                     <article class="ops-help-alert">
                         <span class="ops-help-alert-icon" aria-hidden="true">!</span>
                         <div class="ops-help-alert-details">
-                            <strong>{{ \Illuminate\Support\Str::headline($alert['help_type'] ?? $alert['reason'] ?? 'Help requested') }}</strong>
+                            <strong>{{ $alertTitle }}</strong>
                             <span>
                                 {{ $alert['driver_name'] ?? 'Driver' }}
                                 · {{ $alert['team_name'] ?? 'No team assigned' }}
                                 · {{ $alert['vehicle_number'] ?? 'Vehicle unavailable' }}
                                 · {{ $alert['job_id'] ?? 'Incident unavailable' }}
                             </span>
-                            @if (! empty($alert['comments']))
-                                <small>{{ $alert['comments'] }}</small>
+                            @if (! empty($alert['comments']) || ! empty($alert['reason']))
+                                <small>{{ $alert['comments'] ?? $alert['reason'] }}</small>
                             @endif
                         </div>
                         <div class="ops-help-alert-meta">
@@ -372,7 +373,7 @@
         const details = document.createElement('div');
         details.className = 'ops-help-alert-details';
         const title = document.createElement('strong');
-        title.textContent = (alert.help_type || alert.reason || 'Help requested')
+        title.textContent = alert.title || (alert.help_type || alert.reason || 'Help requested')
             .replace(/_/g, ' ')
             .toLowerCase()
             .replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -384,9 +385,9 @@
             alert.job_id || 'Incident unavailable',
         ].join(' · ');
         details.append(title, summary);
-        if (alert.comments) {
+        if (alert.comments || alert.reason) {
             const comments = document.createElement('small');
-            comments.textContent = alert.comments;
+            comments.textContent = alert.comments || alert.reason;
             details.append(comments);
         }
         item.append(details);

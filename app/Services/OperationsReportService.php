@@ -389,7 +389,7 @@ class OperationsReportService
             ->filter(fn (Carbon $time): bool => $occurredAt && $time->greaterThanOrEqualTo($occurredAt))
             ->sort()->first();
         $arrivalAt = $assignments->flatMap->statusHistory
-            ->where('new_status', JobAssignment::STATUS_ARRIVED)
+            ->whereIn('new_status', [JobAssignment::STATUS_ARRIVED, JobAssignment::STATUS_STARTED])
             ->pluck('changed_at')->filter()->map(fn ($time) => Carbon::parse($time))
             ->filter(fn (Carbon $time): bool => $occurredAt && $time->greaterThanOrEqualTo($occurredAt))
             ->sort()->first();
@@ -486,9 +486,13 @@ class OperationsReportService
             $workingSeconds = $deployments->sum(function (array $deployment): int {
                 $assignment = $deployment['assignment'];
                 $history = $assignment->statusHistory->sortBy('changed_at');
-                $start = $history->firstWhere('new_status', JobAssignment::STATUS_ARRIVED)?->changed_at
+                $start = $history->firstWhere('new_status', JobAssignment::STATUS_STARTED)?->changed_at
+                    ?? $history->firstWhere('new_status', JobAssignment::STATUS_ARRIVED)?->changed_at
                     ?? $history->firstWhere('new_status', JobAssignment::STATUS_IN_PROGRESS)?->changed_at;
-                $end = $history->where('new_status', JobAssignment::STATUS_COMPLETED)->last()?->changed_at;
+                $end = $history->first(fn ($entry): bool => in_array($entry->new_status, [
+                    JobAssignment::STATUS_COMPLETED,
+                    JobAssignment::STATUS_WORK_DONE,
+                ], true))?->changed_at;
 
                 return $start && $end ? max(0, $start->diffInSeconds($end)) : 0;
             });
@@ -497,8 +501,18 @@ class OperationsReportService
                 'vehicle_id' => $deployments->first()['vehicle_id'],
                 'vehicle' => $deployments->first()['vehicle'],
                 'total' => $jobIds->count(),
-                'completed' => $deployments->where('assignment.status', JobAssignment::STATUS_COMPLETED)->pluck('job.id')->unique()->count(),
-                'pending' => $deployments->whereIn('assignment.status', [JobAssignment::STATUS_ASSIGNED, JobAssignment::STATUS_EN_ROUTE, JobAssignment::STATUS_ARRIVED, JobAssignment::STATUS_IN_PROGRESS])->pluck('job.id')->unique()->count(),
+                'completed' => $deployments->whereIn('assignment.status', [
+                    JobAssignment::STATUS_COMPLETED,
+                    JobAssignment::STATUS_WORK_DONE,
+                ])->pluck('job.id')->unique()->count(),
+                'pending' => $deployments->whereIn('assignment.status', [
+                    JobAssignment::STATUS_ASSIGNED,
+                    JobAssignment::STATUS_QUEUED,
+                    JobAssignment::STATUS_EN_ROUTE,
+                    JobAssignment::STATUS_ARRIVED,
+                    JobAssignment::STATUS_STARTED,
+                    JobAssignment::STATUS_IN_PROGRESS,
+                ])->pluck('job.id')->unique()->count(),
                 'average_pickup' => $this->average($times->pluck('pickup_minutes')),
                 'average_response' => $this->average($times->pluck('response_minutes')),
                 'average_resolution' => $this->average($times->pluck('resolution_minutes')),
@@ -585,7 +599,10 @@ class OperationsReportService
         $counts = JobAssignment::query()
             ->whereIn('emergency_job_id', (clone $jobs)->select('emergency_jobs.id'))
             ->selectRaw('fire_station_id, COUNT(*) AS deployments')
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS completed_deployments', [JobAssignment::STATUS_COMPLETED])
+            ->selectRaw('SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) AS completed_deployments', [
+                JobAssignment::STATUS_COMPLETED,
+                JobAssignment::STATUS_WORK_DONE,
+            ])
             ->groupBy('fire_station_id')
             ->get()
             ->keyBy('fire_station_id');

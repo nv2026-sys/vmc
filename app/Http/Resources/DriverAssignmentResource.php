@@ -42,8 +42,14 @@ class DriverAssignmentResource extends JsonResource
             'callerMobile' => $job->caller_phone,
             'receivedAt' => $job->occurred_at?->toIso8601String(),
             'startedAt' => $history->firstWhere('new_status', JobAssignment::STATUS_EN_ROUTE)?->changed_at?->toIso8601String(),
-            'reachedAt' => $history->firstWhere('new_status', JobAssignment::STATUS_ARRIVED)?->changed_at?->toIso8601String(),
-            'completedAt' => $history->firstWhere('new_status', JobAssignment::STATUS_COMPLETED)?->changed_at?->toIso8601String(),
+            'reachedAt' => $history->first(fn (JobStatusHistory $entry): bool => in_array($entry->new_status, [
+                JobAssignment::STATUS_ARRIVED,
+                JobAssignment::STATUS_STARTED,
+            ], true))?->changed_at?->toIso8601String(),
+            'completedAt' => $history->first(fn (JobStatusHistory $entry): bool => in_array($entry->new_status, [
+                JobAssignment::STATUS_COMPLETED,
+                JobAssignment::STATUS_WORK_DONE,
+            ], true))?->changed_at?->toIso8601String(),
             'status' => $assignment->status,
             'declineReason' => $assignment->cancellation_reason,
             'escalationReason' => $escalation?->details['reason'] ?? null,

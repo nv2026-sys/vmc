@@ -163,6 +163,50 @@ class AuthApiTest extends TestCase
         $this->assertSame(1, VehicleGpsLog::query()->where('vehicle_id', $vehicle->id)->count());
     }
 
+    public function test_driver_cannot_login_on_another_device_until_the_active_device_logs_out(): void
+    {
+        $driver = User::factory()->create([
+            'email' => 'single-session-driver@example.com',
+            'password' => 'a-strong-test-password',
+        ]);
+        $driver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+
+        $firstLogin = $this->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+            'device_name' => 'first-device',
+        ])->assertOk();
+        $firstToken = $firstLogin->json('data.token');
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+            'device_name' => 'second-device',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('email')
+            ->assertJsonPath('errors.email.0', 'This driver account is already logged in on another device. Log out there before signing in here.');
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+
+        Auth::forgetGuards();
+        $this->withToken($firstToken)->getJson('/api/v1/auth/me')->assertOk();
+
+        $this->withToken($firstToken)->postJson('/api/v1/auth/logout')->assertNoContent();
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+        Auth::forgetGuards();
+
+        $secondLogin = $this->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+            'device_name' => 'second-device',
+        ])->assertOk();
+        $secondToken = $secondLogin->json('data.token');
+
+        Auth::forgetGuards();
+        $this->withToken($firstToken)->getJson('/api/v1/auth/me')->assertUnauthorized();
+        Auth::forgetGuards();
+        $this->withToken($secondToken)->getJson('/api/v1/auth/me')->assertOk();
+    }
+
     public function test_invalid_credentials_and_inactive_accounts_are_rejected(): void
     {
         $user = User::factory()->create([

@@ -32,6 +32,9 @@
                         $title = match ($event) {
                             'dispatch.assigned', 'assignment.created' => 'New assignment',
                             'assignment.status_changed' => 'Assignment status updated',
+                            'assignment.remark_reply' => 'Reply to your remark',
+                            'driver_assignment.escalated' => 'Driver escalation',
+                            'driver_assignment.need_help' => 'Driver help request',
                             'vehicle.operational_status_changed' => 'Vehicle status updated',
                             default => str($event)->replace(['driver_assignment.', '_'], ['', ' '])->title()->toString() ?: 'Notification',
                         };

@@ -23,6 +23,7 @@ class UpdateAssignmentStatusRequest extends FormRequest
         $status = match ($status) {
             'STARTED' => 'EN_ROUTE',
             'REACHED', 'ON_SITE' => 'ARRIVED',
+            'FINISHED' => 'COMPLETED',
             default => $status,
         };
 
@@ -34,7 +35,15 @@ class UpdateAssignmentStatusRequest extends FormRequest
         return [
             'status' => [
                 'required',
-                Rule::in(['ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED']),
+                Rule::in([
+                    'ASSIGNED',
+                    'EN_ROUTE',
+                    'ARRIVED',
+                    'STARTED',
+                    'IN_PROGRESS',
+                    'COMPLETED',
+                    'WORK_DONE',
+                ]),
             ],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],

@@ -28,12 +28,14 @@ class VehicleTrackingWorkflow
                 'latestGpsLog',
                 'assignments' => function ($assignments) use ($actor): void {
                     $assignments->whereNull('released_at')
+                        ->where('status', '!=', JobAssignment::STATUS_QUEUED)
                         ->latest('assigned_at')
                         ->with([
                             'emergencyJob.ward:id,name',
                             'statusHistory' => fn ($history) => $history
                                 ->whereIn('new_status', [
                                     JobAssignment::STATUS_ARRIVED,
+                                    JobAssignment::STATUS_STARTED,
                                     JobAssignment::STATUS_IN_PROGRESS,
                                 ])
                                 ->orderBy('changed_at'),
@@ -81,7 +83,9 @@ class VehicleTrackingWorkflow
             $assignment = $vehicle->assignments()->find($filters['assignment_id']);
             abort_unless($assignment, 404);
             if ($this->isDriverRestricted($actor)) {
-                abort_unless($this->driverAssignments($actor, $vehicle)->contains('id', $assignment->id), 404);
+                abort_unless($assignment->released_at === null
+                    && $assignment->status !== JobAssignment::STATUS_QUEUED
+                    && $this->driverAssignments($actor, $vehicle)->contains('id', $assignment->id), 404);
             }
 
             $query->where('job_assignment_id', $assignment->id);
@@ -175,7 +179,9 @@ class VehicleTrackingWorkflow
             return false;
         }
 
-        return (int) $assignment->assigned_driver_user_id === (int) $actor->getKey();
+        return $assignment->released_at === null
+            && $assignment->status !== JobAssignment::STATUS_QUEUED
+            && (int) $assignment->assigned_driver_user_id === (int) $actor->getKey();
     }
 
     private function visibleVehicles(User $actor): Builder
@@ -204,6 +210,8 @@ class VehicleTrackingWorkflow
     {
         return $vehicle->assignments()
             ->where('assigned_driver_user_id', $actor->id)
+            ->whereNull('released_at')
+            ->where('status', '!=', JobAssignment::STATUS_QUEUED)
             ->get(['id', 'vehicle_id', 'team_id', 'team_leader_user_id', 'assigned_driver_user_id']);
     }
 

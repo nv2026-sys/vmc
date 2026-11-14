@@ -23,6 +23,7 @@ class NotificationController extends Controller
                 'job_id' => $notification->data['job_id'] ?? null,
                 'vehicle_number' => $notification->data['vehicle_number'] ?? null,
                 'message' => $notification->data['message'] ?? null,
+                'reply' => $notification->data['reply'] ?? null,
                 'previous_status' => $notification->data['previous_status'] ?? null,
                 'new_status' => $notification->data['new_status'] ?? null,
                 'created_at' => $notification->created_at?->toIso8601String(),

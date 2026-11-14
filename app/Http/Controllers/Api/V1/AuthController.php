@@ -57,6 +57,23 @@ class AuthController extends Controller
                 ]);
             }
 
+            if ($user->hasRole('VEHICLE_DRIVER')) {
+                $tokens = $user->tokens();
+                $expiration = (int) config('sanctum.expiration');
+
+                if ($expiration > 0) {
+                    $tokens->where('created_at', '<=', now()->subMinutes($expiration))->delete();
+                }
+
+                $user->tokens()->whereNotNull('expires_at')->where('expires_at', '<=', now())->delete();
+
+                if ($user->tokens()->exists()) {
+                    throw ValidationException::withMessages([
+                        'email' => 'This driver account is already logged in on another device. Log out there before signing in here.',
+                    ]);
+                }
+            }
+
             $user->forceFill(['last_login_at' => now()])->save();
             $newToken = $user->createToken($credentials['device_name'] ?? 'emergency-dispatch-client');
             $auditLogger->record($user, 'auth.login', $user);

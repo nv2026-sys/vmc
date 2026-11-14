@@ -98,6 +98,33 @@ class VehicleTrackingTest extends TestCase
             ->assertJsonPath('data.0.assignments.0.job.longitude', '73.1701000');
     }
 
+    public function test_driver_can_send_and_persist_gps_updates_every_ten_seconds(): void
+    {
+        [, $driver, , $vehicle, $assignment] = $this->activeVehicleAssignment();
+        $this->actingAs($driver, 'sanctum');
+        $firstRecordedAt = now()->subSeconds(20)->startOfSecond();
+
+        foreach ([
+            [$firstRecordedAt, 22.3072, 73.1812],
+            [$firstRecordedAt->copy()->addSeconds(10), 22.3073, 73.1813],
+            [$firstRecordedAt->copy()->addSeconds(20), 22.3074, 73.1814],
+        ] as [$recordedAt, $latitude, $longitude]) {
+            $this->postJson('/api/v1/vehicles/'.$vehicle->id.'/gps', [
+                'assignment_id' => $assignment->id,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'recorded_at' => $recordedAt->toIso8601String(),
+            ])
+                ->assertCreated()
+                ->assertJsonPath('data.recorded_at', $recordedAt->toIso8601String());
+        }
+
+        $this->assertSame(3, $vehicle->gpsLogs()->count());
+        $this->assertSame('22.3074000', $vehicle->fresh()->latitude);
+        $this->assertSame('73.1814000', $vehicle->fresh()->longitude);
+        $this->assertSame('22.3074000', $vehicle->latestGpsLog()->firstOrFail()->latitude);
+    }
+
     public function test_driver_cannot_submit_for_another_team_or_replay_an_older_point(): void
     {
         [, $driver, , $vehicle, $assignment] = $this->activeVehicleAssignment();

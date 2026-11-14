@@ -140,6 +140,30 @@ class DriverAssignmentController extends Controller
         return $this->success($request, 'Driver reached incident location', $record);
     }
 
+    public function started(Request $request, string $assignment): JsonResponse
+    {
+        $data = $request->validate([
+            'reachedLatitude' => ['nullable', 'required_with:reachedLongitude', 'numeric', 'between:-90,90'],
+            'reachedLongitude' => ['nullable', 'required_with:reachedLatitude', 'numeric', 'between:-180,180'],
+            'reachedTime' => [
+                'nullable',
+                'date',
+                'after_or_equal:'.now()->subDay()->toIso8601String(),
+                'before_or_equal:'.now()->toIso8601String(),
+            ],
+        ]);
+        $record = $this->workflow->started($request->user(), $assignment, $data);
+
+        return $this->success($request, 'Assignment started at incident location', $record);
+    }
+
+    public function inProgress(Request $request, string $assignment): JsonResponse
+    {
+        $record = $this->workflow->inProgress($request->user(), $assignment);
+
+        return $this->success($request, 'Assignment marked in progress', $record);
+    }
+
     public function reportIssues(Request $request, string $assignment): JsonResponse
     {
         $data = $request->validate([
@@ -181,6 +205,30 @@ class DriverAssignmentController extends Controller
         $record = $this->workflow->complete($request->user(), $assignment, $data);
 
         return $this->success($request, 'Assignment completed successfully', $record);
+    }
+
+    public function workDone(Request $request, string $assignment): JsonResponse
+    {
+        $data = $request->validate([
+            'completionNotes' => ['nullable', 'string', 'max:2000'],
+            'completedAt' => [
+                'nullable',
+                'date',
+                'after_or_equal:'.now()->subDay()->toIso8601String(),
+                'before_or_equal:'.now()->toIso8601String(),
+            ],
+            'driverLatitude' => ['nullable', 'required_with:driverLongitude', 'numeric', 'between:-90,90'],
+            'driverLongitude' => ['nullable', 'required_with:driverLatitude', 'numeric', 'between:-180,180'],
+            'currentSpeedKmh' => ['nullable', 'numeric', 'between:0,300'],
+        ]);
+        $record = $this->workflow->complete(
+            $request->user(),
+            $assignment,
+            $data,
+            JobAssignment::STATUS_WORK_DONE,
+        );
+
+        return $this->success($request, 'Assignment work marked done', $record);
     }
 
     public function close(Request $request, string $assignment): JsonResponse

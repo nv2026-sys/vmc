@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Ward;
 use App\Notifications\DispatchAssigned;
+use App\Notifications\DriverRemarkReplyAlert;
 use App\Notifications\JobAssignmentAlert;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,6 +72,9 @@ class IncidentAssignmentTest extends TestCase
         $this->patchJson('/api/v1/jobs/'.$job['id'].'/assignments/'.$assignmentIds[0].'/status', [
             'status' => JobAssignment::STATUS_ARRIVED,
         ])->assertOk()->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_ARRIVED);
+        $this->assertSame(0, $driverOne->notifications()
+            ->where('type', DriverRemarkReplyAlert::class)
+            ->count());
 
         $statusFlows = [
             ['started', 'reached', 'in progress'],
@@ -109,6 +113,24 @@ class IncidentAssignmentTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.status', EmergencyJob::STATUS_ASSIGNED);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $driverOne->id,
+            'type' => DriverRemarkReplyAlert::class,
+        ]);
+        $remarkReply = $driverOne->notifications()
+            ->where('type', DriverRemarkReplyAlert::class)
+            ->get()
+            ->first(fn (DatabaseNotification $notification): bool => $notification->data['reply'] === 'Reopened after completion.');
+        $this->assertNotNull($remarkReply);
+        $this->assertSame('assignment.remark_reply', $remarkReply->data['event']);
+        $this->assertSame($job['job_id'], $remarkReply->data['job_id']);
+        $this->actingAs($driverOne)
+            ->getJson(route('notifications.latest'))
+            ->assertOk()
+            ->assertJsonFragment([
+                'event' => 'assignment.remark_reply',
+                'message' => 'New response on incident '.$job['job_id'].': Reopened after completion.',
+            ]);
         $this->assertNull(JobAssignment::query()->findOrFail($assignmentIds[0])->released_at);
         $this->assertSame(Vehicle::STATUS_DEPLOYED, $vehicleOne->fresh()->status);
         $this->assertSame(Team::STATUS_DEPLOYED, $team->fresh()->status);
@@ -220,6 +242,33 @@ class IncidentAssignmentTest extends TestCase
             ->exists());
     }
 
+    public function test_started_and_finished_status_aliases_are_normalized_for_the_api(): void
+    {
+        [$operator, $station, $ward] = $this->operatorWithStation();
+        $driver = $this->driverAt($station);
+        $job = $this->assignedJob($operator, $ward, 'VMC-STATUS-ALIASES');
+        $assignment = $this->assignment($station, $job, 'STATUS-ALIASES-01', null, $driver);
+
+        $this->actingAs($driver, 'sanctum')
+            ->patchJson("/api/v1/jobs/{$job->id}/assignments/{$assignment->id}/status", [
+                'status' => 'started',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_EN_ROUTE);
+
+        $this->patchJson("/api/v1/jobs/{$job->id}/assignments/{$assignment->id}/status", [
+            'status' => 'finished',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_COMPLETED);
+
+        $this->assertNotNull($assignment->fresh()->released_at);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $assignment->id,
+            'new_status' => JobAssignment::STATUS_COMPLETED,
+        ]);
+    }
+
     public function test_one_vehicle_can_serve_multiple_incidents_but_not_be_duplicated_for_one_active_incident(): void
     {
         [$operator, $station, $ward] = $this->operatorWithStation();
@@ -271,11 +320,188 @@ class IncidentAssignmentTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath(
                 'errors.assignments.0',
-                'This driver already has an active assignment on another vehicle. Complete that assignment first, or assign the new incident to the same vehicle.',
+                'A busy vehicle and driver can only be queued together as the same pair.',
             );
 
         $this->assertDatabaseCount('job_assignments', 1);
         $this->assertSame(Vehicle::STATUS_AVAILABLE, $newVehicle->fresh()->status);
+    }
+
+    public function test_busy_vehicle_driver_pair_and_team_are_queued_and_activated_in_order(): void
+    {
+        [$operator, $station, $ward] = $this->operatorWithStation();
+        $driver = $this->driverAt($station);
+        $vehicle = $this->vehicle($station, 'VMC-QUEUE-01');
+        $team = Team::query()->create([
+            'fire_station_id' => $station->id,
+            'name' => 'Queued Response Team',
+            'status' => Team::STATUS_DEPLOYED,
+        ]);
+        $activeJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-ACTIVE');
+        $activeAssignment = JobAssignment::query()->create([
+            'emergency_job_id' => $activeJob->id,
+            'fire_station_id' => $station->id,
+            'vehicle_id' => $vehicle->id,
+            'team_id' => $team->id,
+            'assigned_driver_user_id' => $driver->id,
+            'assigned_by' => $operator->id,
+            'assigned_at' => now()->subMinutes(2),
+            'status' => JobAssignment::STATUS_ASSIGNED,
+        ]);
+        $vehicle->update([
+            'status' => Vehicle::STATUS_DEPLOYED,
+            'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+        ]);
+
+        $otherDriver = $this->driverAt($station);
+        $firstQueuedJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-NEXT-01');
+        $this->actingAs($operator, 'sanctum')
+            ->postJson('/api/v1/jobs/'.$firstQueuedJob->id.'/assignments', [
+                'assignments' => [[
+                    'fire_station_id' => $station->id,
+                    'vehicle_id' => $vehicle->id,
+                    'driver_user_id' => $otherDriver->id,
+                    'team_id' => $team->id,
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('assignments');
+
+        $firstQueuedResponse = $this->postJson('/api/v1/jobs/'.$firstQueuedJob->id.'/assignments', [
+            'assignments' => [[
+                'fire_station_id' => $station->id,
+                'vehicle_id' => $vehicle->id,
+                'driver_user_id' => $driver->id,
+                'team_id' => $team->id,
+            ]],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_QUEUED);
+        $firstQueuedId = $firstQueuedResponse->json('data.assignments.0.id');
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $driver->id,
+            'type' => JobAssignmentAlert::class,
+        ]);
+        $this->assertSame(1, $driver->notifications()
+            ->where('type', JobAssignmentAlert::class)
+            ->where('data->event', 'assignment.queued')
+            ->count());
+
+        $secondQueuedJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-NEXT-02');
+        $secondQueuedResponse = $this->postJson('/api/v1/jobs/'.$secondQueuedJob->id.'/assignments', [
+            'assignments' => [[
+                'fire_station_id' => $station->id,
+                'vehicle_id' => $vehicle->id,
+                'driver_user_id' => $driver->id,
+                'team_id' => $team->id,
+            ]],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_QUEUED);
+        $secondQueuedId = $secondQueuedResponse->json('data.assignments.0.id');
+
+        $teamQueuedVehicle = $this->vehicle($station, 'VMC-QUEUE-TEAM-ONLY');
+        $teamQueuedDriver = $this->driverAt($station);
+        $teamQueuedJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-TEAM-ONLY');
+        $teamQueuedResponse = $this->postJson('/api/v1/jobs/'.$teamQueuedJob->id.'/assignments', [
+            'assignments' => [[
+                'fire_station_id' => $station->id,
+                'vehicle_id' => $teamQueuedVehicle->id,
+                'driver_user_id' => $teamQueuedDriver->id,
+                'team_id' => $team->id,
+            ]],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_QUEUED);
+        $teamQueuedId = $teamQueuedResponse->json('data.assignments.0.id');
+
+        $this->actingAs($driver, 'sanctum')
+            ->getJson('/api/v1/driver/assignments/active')
+            ->assertOk()
+            ->assertJsonPath('data.assignmentId', $activeAssignment->id)
+            ->assertJsonPath('data.status', JobAssignment::STATUS_ASSIGNED);
+        $this->getJson('/api/v1/fleet/assignments')
+            ->assertOk()
+            ->assertJsonFragment(['status' => JobAssignment::STATUS_QUEUED]);
+
+        $this->actingAs($operator, 'sanctum')
+            ->patchJson('/api/v1/jobs/'.$activeJob->id.'/assignments/'.$activeAssignment->id.'/status', [
+                'status' => JobAssignment::STATUS_WORK_DONE,
+            ])
+            ->assertOk();
+
+        $this->assertSame(JobAssignment::STATUS_ASSIGNED, JobAssignment::query()->findOrFail($firstQueuedId)->status);
+        $this->assertSame(JobAssignment::STATUS_QUEUED, JobAssignment::query()->findOrFail($secondQueuedId)->status);
+        $this->assertSame(Vehicle::STATUS_DEPLOYED, $vehicle->fresh()->status);
+        $this->assertSame(Team::STATUS_DEPLOYED, $team->fresh()->status);
+        $this->assertSame(1, $driver->notifications()->where('type', DispatchAssigned::class)->count());
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $firstQueuedId,
+            'previous_status' => JobAssignment::STATUS_QUEUED,
+            'new_status' => JobAssignment::STATUS_ASSIGNED,
+        ]);
+        $this->patchJson('/api/v1/jobs/'.$activeJob->id.'/assignments/'.$activeAssignment->id.'/status', [
+            'status' => JobAssignment::STATUS_ASSIGNED,
+        ])->assertUnprocessable()->assertJsonValidationErrors('status');
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$firstQueuedId.'/work-done', [])
+            ->assertOk()
+            ->assertJsonPath('data.status', JobAssignment::STATUS_WORK_DONE);
+        $this->assertSame(JobAssignment::STATUS_ASSIGNED, JobAssignment::query()->findOrFail($secondQueuedId)->status);
+        $this->assertSame(JobAssignment::STATUS_QUEUED, JobAssignment::query()->findOrFail($teamQueuedId)->status);
+
+        $this->postJson('/api/v1/driver/assignments/'.$secondQueuedId.'/work-done', [])
+            ->assertOk()
+            ->assertJsonPath('data.status', JobAssignment::STATUS_WORK_DONE);
+        $this->assertSame(JobAssignment::STATUS_ASSIGNED, JobAssignment::query()->findOrFail($teamQueuedId)->status);
+    }
+
+    public function test_queued_assignment_waits_for_an_off_road_vehicle_to_return_on_road(): void
+    {
+        [$operator, $station, $ward] = $this->operatorWithStation();
+        $driver = $this->driverAt($station);
+        $vehicle = $this->vehicle($station, 'VMC-QUEUE-OFF-ROAD');
+        $vehicle->update([
+            'status' => Vehicle::STATUS_DEPLOYED,
+            'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+        ]);
+        $activeJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-OFF-ROAD-ACTIVE');
+        $activeAssignment = JobAssignment::query()->create([
+            'emergency_job_id' => $activeJob->id,
+            'fire_station_id' => $station->id,
+            'vehicle_id' => $vehicle->id,
+            'assigned_driver_user_id' => $driver->id,
+            'assigned_by' => $operator->id,
+            'assigned_at' => now()->subMinute(),
+            'status' => JobAssignment::STATUS_ASSIGNED,
+        ]);
+        $queuedJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-OFF-ROAD-NEXT');
+
+        $this->actingAs($operator, 'sanctum')
+            ->postJson('/api/v1/jobs/'.$queuedJob->id.'/assignments', [
+                'assignments' => [[
+                    'fire_station_id' => $station->id,
+                    'vehicle_id' => $vehicle->id,
+                    'driver_user_id' => $driver->id,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_QUEUED);
+        $queuedAssignment = JobAssignment::query()->where('emergency_job_id', $queuedJob->id)->firstOrFail();
+
+        $vehicle->update(['operational_status' => Vehicle::OPERATIONAL_STATUS_OFF_ROAD]);
+        $this->patchJson('/api/v1/jobs/'.$activeJob->id.'/assignments/'.$activeAssignment->id.'/status', [
+            'status' => JobAssignment::STATUS_WORK_DONE,
+        ])->assertOk();
+        $this->assertSame(JobAssignment::STATUS_QUEUED, $queuedAssignment->fresh()->status);
+
+        $this->actingAs($driver, 'sanctum')
+            ->patchJson('/api/v1/vehicles/'.$vehicle->id.'/operational-status', [
+                'status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+            ])
+            ->assertOk();
+        $this->assertSame(JobAssignment::STATUS_ASSIGNED, $queuedAssignment->fresh()->status);
     }
 
     public function test_dispatcher_cannot_assign_an_explicitly_off_road_vehicle(): void

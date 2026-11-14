@@ -32,6 +32,10 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/active', 'active');
             Route::post('/{assignment}/attend', 'attend');
             Route::post('/{assignment}/decline', 'decline');
+            Route::post('/{assignment}/started', 'started');
+            Route::post('/{assignment}/in-progress', 'inProgress');
+            Route::post('/{assignment}/IN_PROGRESS', 'inProgress');
+            Route::post('/{assignment}/work-done', 'workDone');
             Route::post('/{assignment}/escalate', 'escalate');
             Route::post('/{assignment}/need-help', 'needHelp');
             Route::post('/{assignment}/reached', 'reached');

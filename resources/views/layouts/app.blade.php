@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="{{ asset('css/dashboard-polish.css') }}?v={{ filemtime(public_path('css/dashboard-polish.css')) }}">
     <link rel="stylesheet" href="{{ asset('css/accessibility-typography.css') }}?v={{ filemtime(public_path('css/accessibility-typography.css')) }}">
 </head>
-<body class="operations-dashboard-page {{ request()->routeIs('dashboard') ? 'operations-dashboard-layout' : '' }}">
+<body class="operations-dashboard-page {{ request()->routeIs('dashboard') || request()->routeIs('home') ? 'operations-dashboard-layout' : '' }}">
 @php
     $currentUser = auth()->user();
     $currentUser?->loadMissing('roles.permissions');
@@ -211,6 +211,9 @@
                             const event = newest.event || '';
                             toastTitle.textContent = event === 'dispatch.assigned' || event === 'assignment.created'
                                 ? 'New assignment'
+                                : event === 'assignment.remark_reply' ? 'Reply to your remark'
+                                : event === 'driver_assignment.escalated' ? 'Driver escalation'
+                                : event === 'driver_assignment.need_help' ? 'Driver help request'
                                 : event.includes('status') ? 'Status updated' : 'New notification';
                             toastMessage.textContent = newest.message || newest.job_id || newest.vehicle_number || '';
                             toast.hidden = false;

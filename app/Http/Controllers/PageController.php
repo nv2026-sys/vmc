@@ -23,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class PageController extends Controller
 {
@@ -152,12 +153,14 @@ class PageController extends Controller
                     'latestGpsLog',
                     'assignments' => fn (HasMany $assignments) => $assignments
                         ->whereNull('released_at')
+                        ->orderByRaw('CASE WHEN status = ? THEN 1 ELSE 0 END', [JobAssignment::STATUS_QUEUED])
                         ->latest('assigned_at')
                         ->with([
                             'emergencyJob.ward:id,name',
                             'statusHistory' => fn (HasMany $history) => $history
                                 ->whereIn('new_status', [
                                     JobAssignment::STATUS_ARRIVED,
+                                    JobAssignment::STATUS_STARTED,
                                     JobAssignment::STATUS_IN_PROGRESS,
                                 ])
                                 ->orderBy('changed_at'),
@@ -182,7 +185,7 @@ class PageController extends Controller
                         'assignments',
                         fn (Builder $assignments) => $assignments
                             ->whereNull('released_at')
-                            ->where('status', JobAssignment::STATUS_ASSIGNED),
+                            ->whereIn('status', [JobAssignment::STATUS_ASSIGNED, JobAssignment::STATUS_QUEUED]),
                     ),
                 )
                 ->when(
@@ -197,6 +200,7 @@ class PageController extends Controller
                             ->whereNull('released_at')
                             ->whereIn('status', [
                                 JobAssignment::STATUS_ARRIVED,
+                                JobAssignment::STATUS_STARTED,
                                 JobAssignment::STATUS_IN_PROGRESS,
                             ]),
                     ),
@@ -248,7 +252,7 @@ class PageController extends Controller
             ])->sum(),
             'en_route' => (int) ($jobStatusCounts[EmergencyJob::STATUS_EN_ROUTE] ?? 0),
         ]);
-        $helpRequests = $canViewJobs ? $this->recentHelpRequests($user) : collect();
+        $helpRequests = $canViewJobs ? $this->recentDriverAlerts($user) : collect();
 
         if (! is_string($incidentFilter) || ! array_key_exists($incidentFilter, $incidentFilterStatuses)) {
             $incidentFilter = 'open';
@@ -326,6 +330,7 @@ class PageController extends Controller
                     ->whereNull('released_at')
                     ->whereIn('status', [
                         JobAssignment::STATUS_ARRIVED,
+                        JobAssignment::STATUS_STARTED,
                         JobAssignment::STATUS_IN_PROGRESS,
                     ]),
             )->count()
@@ -410,10 +415,15 @@ class PageController extends Controller
     public function dashboardHelpRequests(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => $this->recentHelpRequests($request->user())->map(function ($notification): array {
+            'data' => $this->recentDriverAlerts($request->user())->map(function ($notification): array {
                 $alert = $notification->data;
+                $action = $alert['action'] ?? 'need_help';
 
                 return [
+                    'action' => $action,
+                    'title' => $action === 'escalated'
+                        ? 'Driver escalation'
+                        : Str::headline($alert['help_type'] ?? $alert['reason'] ?? 'Help requested'),
                     'help_type' => $alert['help_type'] ?? null,
                     'reason' => $alert['reason'] ?? null,
                     'comments' => $alert['comments'] ?? null,
@@ -554,6 +564,7 @@ class PageController extends Controller
                 'latestGpsLog',
                 'assignments' => fn (HasMany $assignments) => $assignments
                     ->whereNull('released_at')
+                    ->orderByRaw('CASE WHEN status = ? THEN 1 ELSE 0 END', [JobAssignment::STATUS_QUEUED])
                     ->latest('assigned_at')
                     ->with('emergencyJob:id,status'),
             ])
@@ -688,7 +699,11 @@ class PageController extends Controller
                 $latitude = $gpsLog?->latitude ?? $vehicle->latitude;
                 $longitude = $gpsLog?->longitude ?? $vehicle->longitude;
                 $status = VehicleDisplayStatus::describe($vehicle, $assignment);
-                $arrival = $assignment?->statusHistory->firstWhere('new_status', JobAssignment::STATUS_ARRIVED);
+                $arrival = $assignment?->statusHistory->first(fn ($entry): bool => in_array(
+                    $entry->new_status,
+                    [JobAssignment::STATUS_ARRIVED, JobAssignment::STATUS_STARTED],
+                    true,
+                ));
                 $workStart = $assignment?->statusHistory->firstWhere('new_status', JobAssignment::STATUS_IN_PROGRESS);
 
                 return [
@@ -742,14 +757,18 @@ class PageController extends Controller
         return $user->hasRole('SUPER_ADMIN') || $user->hasRole('CONTROL_ROOM_ADMIN');
     }
 
-    private function recentHelpRequests(User $user): Collection
+    private function recentDriverAlerts(User $user): Collection
     {
         return $user->notifications()
             ->where('type', DriverAssignmentActionAlert::class)
             ->latest()
             ->limit(50)
             ->get()
-            ->filter(fn ($notification): bool => ($notification->data['action'] ?? null) === 'need_help')
+            ->filter(fn ($notification): bool => in_array(
+                $notification->data['action'] ?? null,
+                ['need_help', 'escalated'],
+                true,
+            ))
             ->take(5)
             ->values();
     }

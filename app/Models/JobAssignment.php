@@ -10,13 +10,19 @@ class JobAssignment extends Model
 {
     public const STATUS_ASSIGNED = 'ASSIGNED';
 
+    public const STATUS_QUEUED = 'QUEUED';
+
     public const STATUS_EN_ROUTE = 'EN_ROUTE';
 
     public const STATUS_ARRIVED = 'ARRIVED';
 
+    public const STATUS_STARTED = 'STARTED';
+
     public const STATUS_IN_PROGRESS = 'IN_PROGRESS';
 
     public const STATUS_COMPLETED = 'COMPLETED';
+
+    public const STATUS_WORK_DONE = 'WORK_DONE';
 
     public const STATUS_DECLINED = 'DECLINED';
 

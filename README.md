@@ -34,7 +34,8 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 ### Phase 4 implementation
 
 - Assign multiple available vehicles, optionally paired with teams, to one incident in a single transaction. Assignment checks station scope, ward coverage, active station/resource state, and prevents duplicate or already-deployed resources.
-- Set each unit to any supported status (`ASSIGNED`, `EN_ROUTE`, `ARRIVED`, `IN_PROGRESS`, or `COMPLETED`) at any time; completed assignments can be reopened, with every change retained in status history.
+- Queue a busy vehicle and its current driver together as the same pair, or queue a busy response team. Queued assignments are shown as `QUEUED`, do not replace the driver's active assignment, and are activated in order when their vehicle, driver, and team become available. Activation is audited, recorded in status history, and notifies the driver/team.
+- Set each unit to any supported status (`ASSIGNED`, `EN_ROUTE`, `ARRIVED`, `STARTED`, `IN_PROGRESS`, `COMPLETED`, or `WORK_DONE`) at any time; completed assignments can be reopened only when doing so will not conflict with another active or queued assignment. Every change is retained in status history. The general assignment-status API retains the `STARTED` → `EN_ROUTE`, `REACHED`/`ON_SITE` → `ARRIVED`, and `FINISHED` → `COMPLETED` aliases; the driver `/started` action records the new `STARTED` status at the incident.
 - Update vehicle/team availability on dispatch and release, derive the incident's aggregate status from all assignments, and audit each dispatch/status change.
 - Vehicle drivers can update only assignments for their assigned team leader or active team membership; station membership alone does not grant driver access to other units.
 - Active, assigned, en-route, arrived, in-progress, and completed job queues show live, station-scoped incident records.
@@ -43,12 +44,13 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 
 ### Phase 5 implementation
 
-- Accept authenticated GPS points for active vehicle assignments, validate geographic, speed, and time ranges, reject stale points, and update the latest vehicle coordinates transactionally.
+- Accept authenticated GPS points for active vehicle assignments, validate geographic, speed, and time ranges, reject stale points, and update the latest vehicle coordinates transactionally. The mobile app should POST the device's current fix every 10 seconds while tracking is active.
 - Restrict driver uploads and route history to vehicles and assignments tied to their active team membership or leadership; operational tracking respects station scope.
 - Vehicle drivers need to be the leader or an active member of the response team attached to the assignment; assignments without a linked team cannot accept driver GPS uploads.
 - Record the authenticated receiver for each GPS point and audit accepted location updates.
 - Show latest vehicle positions and assignment route history in the tracking page and API; route queries default to the last 24 hours and are capped at 500 points per request.
 - Authenticated API endpoints: `GET /api/v1/tracking`, `GET /api/v1/vehicles/{vehicle}/gps`, and `POST /api/v1/vehicles/{vehicle}/gps`.
+- GPS update payload: `assignment_id` (when assigned), `latitude`, `longitude`, and optional `speed_kph` and device-captured `recorded_at` (ISO 8601). Each accepted POST appends a row to `vehicle_gps_logs` and refreshes the vehicle's latest coordinates. GPS permission denial or network errors should be handled by the mobile app and retried on its next 10-second cycle.
 
 ### Phase 6 implementation
 
@@ -173,7 +175,7 @@ The demo seeder runs only in local/testing environments and is repeatable. It cr
 
 ### Authentication API
 
-- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). Driver GPS coordinates are recorded for the linked vehicle using the normal On Road tracking rules. The response includes that vehicle's latest location under `data.vehicle.location`.
+- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). A vehicle driver can have only one active API session: another login is rejected until the active device logs out or its token expires. Driver GPS coordinates are recorded for the linked vehicle using the normal On Road tracking rules. The response includes that vehicle's latest location under `data.vehicle.location`.
 - `GET /api/v1/auth/me` — requires `Authorization: Bearer <token>`; returns the user, role/permission codes, and assigned station IDs.
 - `POST /api/v1/auth/logout` — requires a bearer token and revokes that token.
 
@@ -185,19 +187,22 @@ The mobile driver workflow is authenticated and restricted to the assigned vehic
 
 - `GET /api/v1/driver/assignments/active` — returns the driver's latest active assignment, or `data: null`.
 - `POST /api/v1/driver/assignments/{assignment}/attend` — sets the active assignment to `EN_ROUTE`; optional device coordinates also record a GPS point.
+- `POST /api/v1/driver/assignments/{assignment}/started` — marks the driver at the incident as `STARTED`; optional reached coordinates and time are supported.
+- `POST /api/v1/driver/assignments/{assignment}/in-progress` — marks the assignment `IN_PROGRESS` (`/{assignment}/IN_PROGRESS` is also supported).
 - `POST /api/v1/driver/assignments/{assignment}/decline` — declines only a pending assignment and releases its allocation.
 - `POST /api/v1/driver/assignments/{assignment}/escalate` and `/need-help` — append incident remarks and notify active control-room administrators.
-- The `/need-help` endpoint accepts `helpType` (`AMBULANCE`, `WATER_TANKER`, `VEHICLE_BREAKDOWN`, `ACCIDENT`, `MEDICAL_EMERGENCY`, `FIRE_EQUIPMENT_PROBLEM`, `ROUTE_PROBLEM`, or `OTHER`) and optional `comments`. It includes driver, vehicle, station, team, incident, and timestamp details in the control-room notification, which appears in the dashboard's Driver help requests panel. The legacy `reason` field remains supported.
+- The `/need-help` endpoint accepts `helpType` (`AMBULANCE`, `WATER_TANKER`, `VEHICLE_BREAKDOWN`, `ACCIDENT`, `MEDICAL_EMERGENCY`, `FIRE_EQUIPMENT_PROBLEM`, `ROUTE_PROBLEM`, or `OTHER`) and optional `comments`. It includes driver, vehicle, station, team, incident, and timestamp details in the control-room notification, which appears in the dashboard's Driver alerts panel. The legacy `reason` field remains supported. `/escalate` alerts also appear in that panel and produce a dashboard notification flash.
 - `POST /api/v1/driver/assignments/{assignment}/reached` — sets the active assignment to `ARRIVED` and can record device coordinates.
 - `POST /api/v1/driver/assignments/{assignment}/report-issues` — appends selected issues and remarks to the incident history.
 - `POST /api/v1/driver/assignments/{assignment}/complete` — sets the active assignment to `COMPLETED`, releasing it.
+- `POST /api/v1/driver/assignments/{assignment}/work-done` — sets the active assignment to `WORK_DONE`, releasing it.
 - `POST /api/v1/driver/assignments/{assignment}/close` — appends a final close remark after completion.
 
 All lifecycle changes use the existing assignment and status-history records. VMC route history is available through `GET /api/v1/vehicles/{vehicle}/gps`; the API does not send device coordinates to an external routing service.
 
 ### User notifications
 
-Authenticated web users can open **Notifications** from the top bar to see their own assignment and vehicle status alerts, mark one notification read, or mark all as read. New dispatches notify the assigned driver and team; status and On Road/Off Road changes notify the other assignment participants and authorized users for that station, plus authorized control-room administrators. Notifications are stored in Laravel's `notifications` table and are scoped to each recipient. Driver apps can retrieve and mark their own notifications through `GET /api/v1/fleet/notifications` and `PATCH /api/v1/fleet/notifications/{notificationId}/read`.
+Authenticated web users can open **Notifications** from the top bar to see their own assignment and vehicle status alerts, mark one notification read, or mark all as read. New dispatches notify the assigned driver and team; status and On Road/Off Road changes notify the other assignment participants and authorized users for that station, plus authorized control-room administrators. When authorized staff updates an assignment with a remark, the assigned driver receives a reply notification and dashboard flash. Notifications are stored in Laravel's `notifications` table and are scoped to each recipient. Driver apps can retrieve and mark their own notifications through `GET /api/v1/fleet/notifications` and `PATCH /api/v1/fleet/notifications/{notificationId}/read`.
 
 ### Master-data API
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmergencyJob;
+use App\Models\JobAssignment;
 use App\Models\JobStatusHistory;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -46,6 +47,7 @@ class VehicleDetailsController extends Controller
                 'assignedDriver:id,name',
                 'statusHistory' => fn ($history) => $history->with('actor:id,name')->orderByDesc('changed_at'),
             ])
+            ->orderByRaw('CASE WHEN status = ? THEN 1 ELSE 0 END', [JobAssignment::STATUS_QUEUED])
             ->orderByDesc('assigned_at')
             ->get();
         $closedIncidents = $canViewJobs

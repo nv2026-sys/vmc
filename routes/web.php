@@ -9,6 +9,7 @@ use App\Http\Controllers\OperationsReportExportController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\RoleManagementController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\VehicleDetailsController;
 use App\Http\Controllers\VehicleTrackingController;
 use App\Http\Controllers\WebAuthController;
 use Illuminate\Support\Facades\Route;
@@ -66,6 +67,10 @@ foreach (['stations', 'wards', 'vehicles', 'teams'] as $kind) {
             ->name('app.'.$kind.'.destroy');
     });
 }
+Route::get('/vehicles/{vehicle}', [VehicleDetailsController::class, 'show'])
+    ->whereNumber('vehicle')
+    ->middleware(['auth', 'permission:vehicles.view'])
+    ->name('app.vehicles.show');
 
 Route::middleware(['auth', 'permission:users.view'])->group(function (): void {
     Route::get('/users', [UserManagementController::class, 'index'])->name('users.index');

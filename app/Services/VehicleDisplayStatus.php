@@ -13,8 +13,11 @@ class VehicleDisplayStatus
     public static function describe(Vehicle $vehicle, ?JobAssignment $assignment = null): array
     {
         $code = match ($assignment?->status) {
+            JobAssignment::STATUS_QUEUED => 'QUEUED',
             JobAssignment::STATUS_EN_ROUTE => 'ON_ROAD',
-            JobAssignment::STATUS_ARRIVED, JobAssignment::STATUS_IN_PROGRESS => 'AT_INCIDENT',
+            JobAssignment::STATUS_ARRIVED,
+            JobAssignment::STATUS_STARTED,
+            JobAssignment::STATUS_IN_PROGRESS => 'AT_INCIDENT',
             JobAssignment::STATUS_ASSIGNED => 'ASSIGNED',
             default => self::operationalStatus($vehicle) ?? match ($vehicle->status) {
                 Vehicle::STATUS_MAINTENANCE => 'OFF_ROAD',
@@ -32,6 +35,7 @@ class VehicleDisplayStatus
                 'ASSIGNED' => 'Assigned',
                 'IDLE' => 'Idle / Free',
                 'AT_INCIDENT' => 'At Incident / On Site',
+                'QUEUED' => 'Queued / Next',
                 default => 'Status unavailable',
             },
             'class' => strtolower($code),

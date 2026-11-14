@@ -161,7 +161,10 @@ class IncidentController extends Controller
     {
         $this->workflow->assignResources($request->user(), $job, $request->validated());
 
-        return redirect()->route('app.jobs.show', $job)->with('status', 'Response resources assigned.');
+        return redirect()->route('app.jobs.show', $job)->with(
+            'status',
+            'Response resources assigned. Busy resources are queued automatically when eligible.',
+        );
     }
 
     public function updateAssignmentStatus(

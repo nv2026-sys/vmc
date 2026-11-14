@@ -466,7 +466,11 @@
                 "exec": [
                   "if (pm.response.code === 200) {",
                   "    const record = pm.response.json().data;",
-                  "    if (record && record.assignmentId) pm.collectionVariables.set('assignment_id', record.assignmentId);",
+                  "    if (record && record.assignmentId) {",
+                  "        pm.collectionVariables.set('assignment_id', record.assignmentId);",
+                  "    } else {",
+                  "        pm.collectionVariables.unset('assignment_id');",
+                  "    }",
                   "}"
                 ]
               }
@@ -606,6 +610,36 @@
           "response": []
         },
         {
+          "name": "Mark Started at Incident",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}", "options": {"raw": {"language": "json"}}},
+            "url": {
+              "raw": "{{base_url}}/api/v1/driver/assignments/{{assignment_id}}/started",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "driver", "assignments", "{{assignment_id}}", "started"]
+            },
+            "description": "Sets assignment status to STARTED at the incident. Optional reachedLatitude, reachedLongitude, and reachedTime record arrival location and time."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Assignment In Progress",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{}", "options": {"raw": {"language": "json"}}},
+            "url": {
+              "raw": "{{base_url}}/api/v1/driver/assignments/{{assignment_id}}/in-progress",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "driver", "assignments", "{{assignment_id}}", "in-progress"]
+            },
+            "description": "Sets assignment status to IN_PROGRESS."
+          },
+          "response": []
+        },
+        {
           "name": "Report Route / Incident Issues",
           "request": {
             "method": "POST",
@@ -632,6 +666,21 @@
               "path": ["api", "v1", "driver", "assignments", "{{assignment_id}}", "complete"]
             },
             "description": "Transitions an ARRIVED assignment through IN_PROGRESS and COMPLETED, then releases it under VMC lifecycle rules."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Work Done",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Accept", "value": "application/json"}, {"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"completionNotes\": \"Response work completed successfully\"\n}", "options": {"raw": {"language": "json"}}},
+            "url": {
+              "raw": "{{base_url}}/api/v1/driver/assignments/{{assignment_id}}/work-done",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "driver", "assignments", "{{assignment_id}}", "work-done"]
+            },
+            "description": "Sets assignment status to WORK_DONE and releases its allocation. Optional completion notes, timestamp, and device GPS are supported."
           },
           "response": []
         },
@@ -693,7 +742,7 @@
                 "status"
               ]
             },
-            "description": "Updates an assignment status using POST for compatibility with IIS hosting that blocks PATCH. PATCH is also supported on servers that allow it. Allowed values: ASSIGNED, EN_ROUTE, ARRIVED, IN_PROGRESS, COMPLETED. Statuses may be selected in any order, including reopening a completed assignment. job_id is the numeric job.id from List My Active Assignments, not the public job reference."
+            "description": "Updates an assignment status using POST for compatibility with IIS hosting that blocks PATCH. PATCH is also supported on servers that allow it. Allowed values: ASSIGNED, EN_ROUTE, ARRIVED, STARTED, IN_PROGRESS, COMPLETED, WORK_DONE. General status aliases STARTED, REACHED/ON_SITE, and FINISHED map to EN_ROUTE, ARRIVED, and COMPLETED; the driver-specific /started action records STARTED at the incident. Statuses may be selected in any order, including reopening a completed assignment. job_id is the numeric job.id from List My Active Assignments, not the public job reference."
           },
           "response": []
         },
@@ -713,7 +762,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"assignment_id\": \"{{assignment_id}}\",\n  \"latitude\": \"{{device_latitude}}\",\n  \"longitude\": \"{{device_longitude}}\"\n}",
+              "raw": "{\n  \"assignment_id\": \"{{assignment_id}}\",\n  \"latitude\": \"{{device_latitude}}\",\n  \"longitude\": \"{{device_longitude}}\",\n  \"speed_kph\": \"{{device_speed_kph}}\",\n  \"recorded_at\": \"{{device_recorded_at}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -733,7 +782,7 @@
                 "gps"
               ]
             },
-            "description": "Records a GPS point for the specified active assignment. Set device_latitude and device_longitude to the current device fix before sending; coordinates are decimal degrees. recorded_at is optional and must be within the last 24 hours and no more than five minutes in the future."
+            "description": "The mobile app should send this authenticated POST every 10 seconds while location tracking is active. Set device_latitude, device_longitude, optional device_speed_kph, and device_recorded_at from the current device GPS fix (recorded_at should be ISO 8601). Every accepted request appends a vehicle_gps_logs record and updates the vehicle's latest coordinates. The API rejects points older than the latest saved point, requires On Road status, and is rate-limited to 120 requests per minute."
           },
           "response": []
         },

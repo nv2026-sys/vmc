@@ -175,11 +175,20 @@ class DriverAssignmentApiTest extends TestCase
         $this->assertSame(1, $dispatcher->notifications()->count());
         $this->assertSame(0, $otherStationDispatcher->notifications()->count());
 
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$assignment->id.'/escalate', [
+                'reason' => 'Need immediate control-room guidance.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.controlRoomRecipients', 2);
+
         $this->actingAs($dispatcher)
             ->get('/dashboard')
             ->assertOk()
-            ->assertSee('Driver help requests')
+            ->assertSee('Driver alerts')
             ->assertSee('Ambulance')
+            ->assertSee('Driver escalation')
+            ->assertSee('Need immediate control-room guidance.')
             ->assertSee('Rescue Team Alpha')
             ->assertSee($assignment->vehicle->vehicle_number)
             ->assertSee($job->job_id)
@@ -188,10 +197,9 @@ class DriverAssignmentApiTest extends TestCase
 
         $this->getJson(route('dashboard.help-requests'))
             ->assertOk()
-            ->assertJsonPath('data.0.help_type', 'AMBULANCE')
-            ->assertJsonPath('data.0.team_name', 'Rescue Team Alpha')
-            ->assertJsonPath('data.0.vehicle_number', $assignment->vehicle->vehicle_number)
-            ->assertJsonPath('data.0.job_id', $job->job_id);
+            ->assertJsonFragment(['action' => 'need_help', 'help_type' => 'AMBULANCE'])
+            ->assertJsonFragment(['action' => 'escalated', 'title' => 'Driver escalation'])
+            ->assertJsonFragment(['reason' => 'Need immediate control-room guidance.']);
 
         $this->actingAs($otherStationDispatcher)
             ->get('/dashboard')
@@ -241,6 +249,59 @@ class DriverAssignmentApiTest extends TestCase
 
         $this->assertSame(JobAssignment::STATUS_ARRIVED, $assignment->fresh()->status);
         $this->assertSame(0, VehicleGpsLog::query()->where('vehicle_id', $assignment->vehicle_id)->count());
+    }
+
+    public function test_driver_started_in_progress_and_work_done_endpoints_record_the_new_statuses(): void
+    {
+        [$driver, , $job, , $assignment] = $this->assignmentFixture('DRIVER-NEW-STATUSES');
+        $this->actingAs($driver, 'sanctum');
+
+        $activeAssignmentId = (int) $this->getJson('/api/v1/driver/assignments/active')
+            ->assertOk()
+            ->assertJsonPath('data.id', 'DRIVER-NEW-STATUSES')
+            ->assertJsonPath('data.assignmentId', $assignment->id)
+            ->assertJsonPath('data.status', JobAssignment::STATUS_ASSIGNED)
+            ->json('data.assignmentId');
+
+        $startedAt = now()->startOfSecond();
+        $this->postJson('/api/v1/driver/assignments/'.$activeAssignmentId.'/started', [
+            'reachedTime' => $startedAt->toIso8601String(),
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', JobAssignment::STATUS_STARTED)
+            ->assertJsonPath('data.reachedAt', $startedAt->toIso8601String());
+
+        $this->postJson('/api/v1/driver/assignments/'.$activeAssignmentId.'/in-progress')
+            ->assertOk()
+            ->assertJsonPath('data.status', JobAssignment::STATUS_IN_PROGRESS);
+
+        $completedAt = now()->startOfSecond();
+        $this->postJson('/api/v1/driver/assignments/'.$activeAssignmentId.'/work-done', [
+            'completionNotes' => 'Work completed at the incident.',
+            'completedAt' => $completedAt->toIso8601String(),
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', JobAssignment::STATUS_WORK_DONE)
+            ->assertJsonPath('data.completedAt', $completedAt->toIso8601String());
+
+        $this->assertSame(EmergencyJob::STATUS_COMPLETED, $job->fresh()->status);
+        $this->assertNotNull($assignment->fresh()->released_at);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $assignment->id,
+            'new_status' => JobAssignment::STATUS_STARTED,
+        ]);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $assignment->id,
+            'new_status' => JobAssignment::STATUS_IN_PROGRESS,
+        ]);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $assignment->id,
+            'new_status' => JobAssignment::STATUS_WORK_DONE,
+        ]);
+
+        $this->postJson('/api/v1/driver/assignments/'.$activeAssignmentId.'/close', [
+            'closeReason' => 'Returning to station.',
+        ])->assertOk()->assertJsonPath('data.status', JobAssignment::STATUS_WORK_DONE);
     }
 
     public function test_declining_one_assignment_does_not_reopen_an_incident_with_another_active_vehicle(): void
