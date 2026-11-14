@@ -3,6 +3,7 @@
 use App\Http\Middleware\ApplySecurityHeaders;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\RefreshDriverLoginSession;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,7 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(ApplySecurityHeaders::class);
-        $middleware->appendToGroup('web', EnsureUserIsActive::class);
+        $middleware->appendToGroup('web', [
+            EnsureUserIsActive::class,
+            RefreshDriverLoginSession::class,
+        ]);
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'permission' => EnsureUserHasPermission::class,

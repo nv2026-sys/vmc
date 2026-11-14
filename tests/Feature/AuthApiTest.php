@@ -207,6 +207,61 @@ class AuthApiTest extends TestCase
         $this->withToken($secondToken)->getJson('/api/v1/auth/me')->assertOk();
     }
 
+    public function test_driver_api_and_web_logins_share_the_single_device_lock(): void
+    {
+        $driver = User::factory()->create([
+            'email' => 'cross-channel-driver@example.com',
+            'password' => 'a-strong-test-password',
+        ]);
+        $driver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+
+        $apiToken = $this->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertOk()->json('data.token');
+
+        $this->post('/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertSessionHasErrors('email');
+
+        $this->withToken($apiToken)->postJson('/api/v1/auth/logout')->assertNoContent();
+        Auth::forgetGuards();
+
+        $this->post('/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertRedirect(route('dashboard'));
+
+        Auth::forgetGuards();
+        $this->withSession([])->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.email.0', 'This driver account is already logged in on another device. Log out there before signing in here.');
+    }
+
+    public function test_driver_web_logout_releases_the_single_device_lock(): void
+    {
+        $driver = User::factory()->create([
+            'email' => 'web-session-driver@example.com',
+            'password' => 'a-strong-test-password',
+        ]);
+        $driver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+
+        $this->post('/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertRedirect(route('dashboard'));
+
+        $this->post('/logout')->assertRedirect(route('dashboard'));
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertOk();
+    }
+
     public function test_invalid_credentials_and_inactive_accounts_are_rejected(): void
     {
         $user = User::factory()->create([

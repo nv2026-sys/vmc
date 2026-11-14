@@ -7,6 +7,7 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\DriverLoginSessionManager;
 use App\Services\VehicleStatusWorkflow;
 use App\Services\VehicleTrackingWorkflow;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ class AuthController extends Controller
     public function store(
         LoginRequest $request,
         AuditLogger $auditLogger,
+        DriverLoginSessionManager $driverSessions,
         VehicleStatusWorkflow $statusWorkflow,
         VehicleTrackingWorkflow $trackingWorkflow,
     ): JsonResponse {
@@ -46,6 +48,7 @@ class AuthController extends Controller
             $credentials,
             $gpsData,
             $auditLogger,
+            $driverSessions,
             $statusWorkflow,
             $trackingWorkflow,
         ): NewAccessToken {
@@ -58,24 +61,14 @@ class AuthController extends Controller
             }
 
             if ($user->hasRole('VEHICLE_DRIVER')) {
-                $tokens = $user->tokens();
-                $expiration = (int) config('sanctum.expiration');
-
-                if ($expiration > 0) {
-                    $tokens->where('created_at', '<=', now()->subMinutes($expiration))->delete();
-                }
-
-                $user->tokens()->whereNotNull('expires_at')->where('expires_at', '<=', now())->delete();
-
-                if ($user->tokens()->exists()) {
-                    throw ValidationException::withMessages([
-                        'email' => 'This driver account is already logged in on another device. Log out there before signing in here.',
-                    ]);
-                }
+                $driverSessions->assertAvailable($user);
             }
 
             $user->forceFill(['last_login_at' => now()])->save();
             $newToken = $user->createToken($credentials['device_name'] ?? 'emergency-dispatch-client');
+            if ($user->hasRole('VEHICLE_DRIVER')) {
+                $driverSessions->claimApi($user, $newToken);
+            }
             $auditLogger->record($user, 'auth.login', $user);
 
             if (isset($gpsData['latitude'], $gpsData['longitude'])) {
@@ -139,15 +132,19 @@ class AuthController extends Controller
     public function destroy(
         Request $request,
         AuditLogger $auditLogger,
+        DriverLoginSessionManager $driverSessions,
         VehicleStatusWorkflow $statusWorkflow,
     ): Response {
         $user = $request->user();
         $token = $user->currentAccessToken();
 
-        DB::transaction(function () use ($user, $token, $auditLogger, $statusWorkflow): void {
+        DB::transaction(function () use ($user, $token, $auditLogger, $statusWorkflow, $driverSessions): void {
             $statusWorkflow->markLinkedVehicleOffRoadOnLogout($user);
 
             if ($token instanceof PersonalAccessToken) {
+                if ($user->hasRole('VEHICLE_DRIVER')) {
+                    $driverSessions->releaseApi($user, $token->getKey());
+                }
                 $token->delete();
             }
 
