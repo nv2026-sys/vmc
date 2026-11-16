@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use App\Models\DriverLoginSession;
 use App\Models\FireStation;
 use App\Models\Role;
 use App\Models\User;
@@ -174,7 +173,9 @@ class UserManagementController extends Controller
             if (! $validated['is_active']
                 || $validated['password'] !== null
                 || $validated['role_code'] !== 'VEHICLE_DRIVER') {
-                DriverLoginSession::query()->where('user_id', $managedUser->id)->delete();
+                DB::table(config('session.table', 'sessions'))
+                    ->where('user_id', $managedUser->id)
+                    ->delete();
             }
 
             $auditLogger->record($actor, 'users.updated', $managedUser, [

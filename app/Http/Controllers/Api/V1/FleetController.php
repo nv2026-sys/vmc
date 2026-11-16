@@ -29,7 +29,7 @@ class FleetController extends Controller
             ->with([
                 'emergencyJob.ward:id,name,code',
                 'fireStation:id,name,code',
-                'vehicle:id,vehicle_number,vehicle_type,status,latitude,longitude',
+                'vehicle:id,vehicle_number,vehicle_type,status,operational_status,latitude,longitude',
                 'vehicle.latestGpsLog',
                 'team:id,name',
                 'teamLeader:id,name',

@@ -90,6 +90,14 @@ class FleetApiTest extends TestCase
     public function test_fleet_assignments_returns_all_unreleased_jobs_for_the_driver_with_pagination(): void
     {
         [, $driver, $station, $ward, $vehicle] = $this->fleetFixture();
+        $vehicle->update(['operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD]);
+        $secondVehicle = Vehicle::query()->create([
+            'fire_station_id' => $station->id,
+            'vehicle_number' => 'FLEET-MULTI-02-UNIT',
+            'vehicle_type' => 'RESCUE',
+            'status' => Vehicle::STATUS_AVAILABLE,
+            'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+        ]);
         $jobs = collect(['FLEET-MULTI-01', 'FLEET-MULTI-02', 'FLEET-MULTI-03'])
             ->map(fn (string $jobId): EmergencyJob => $this->job(User::factory()->create(), $ward, $jobId));
 
@@ -97,7 +105,7 @@ class FleetApiTest extends TestCase
             JobAssignment::query()->create([
                 'emergency_job_id' => $job->id,
                 'fire_station_id' => $station->id,
-                'vehicle_id' => $vehicle->id,
+                'vehicle_id' => $index === 1 ? $secondVehicle->id : $vehicle->id,
                 'assigned_driver_user_id' => $driver->id,
                 'assigned_at' => now()->subMinutes($index),
                 'status' => $index === 0
@@ -105,6 +113,24 @@ class FleetApiTest extends TestCase
                     : JobAssignment::STATUS_QUEUED,
             ]);
         }
+
+        $otherDriver = User::factory()->create();
+        $otherDriver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+        $otherVehicle = Vehicle::query()->create([
+            'fire_station_id' => $station->id,
+            'vehicle_number' => 'FLEET-OTHER-DRIVER-UNIT',
+            'vehicle_type' => 'RESCUE',
+            'status' => Vehicle::STATUS_AVAILABLE,
+        ]);
+        $otherDriverJob = $this->job(User::factory()->create(), $ward, 'FLEET-MULTI-OTHER-DRIVER');
+        JobAssignment::query()->create([
+            'emergency_job_id' => $otherDriverJob->id,
+            'fire_station_id' => $station->id,
+            'vehicle_id' => $otherVehicle->id,
+            'assigned_driver_user_id' => $otherDriver->id,
+            'assigned_at' => now()->addMinute(),
+            'status' => JobAssignment::STATUS_ASSIGNED,
+        ]);
 
         $releasedJob = $this->job(User::factory()->create(), $ward, 'FLEET-MULTI-RELEASED');
         JobAssignment::query()->create([
@@ -127,7 +153,16 @@ class FleetApiTest extends TestCase
             ->assertJsonFragment(['job_id' => 'FLEET-MULTI-01'])
             ->assertJsonFragment(['job_id' => 'FLEET-MULTI-02'])
             ->assertJsonFragment(['job_id' => 'FLEET-MULTI-03'])
-            ->assertDontSee('FLEET-MULTI-RELEASED');
+            ->assertDontSee('FLEET-MULTI-RELEASED')
+            ->assertDontSee('FLEET-MULTI-OTHER-DRIVER')
+            ->assertJsonFragment([
+                'vehicle_number' => 'FLEET-FIRE-01',
+                'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+            ])
+            ->assertJsonFragment([
+                'vehicle_number' => 'FLEET-MULTI-02-UNIT',
+                'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+            ]);
 
         $this->getJson('/api/v1/fleet/assignments?per_page=2&page=2')
             ->assertOk()

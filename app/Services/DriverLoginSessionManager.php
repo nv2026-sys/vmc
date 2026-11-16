@@ -2,99 +2,40 @@
 
 namespace App\Services;
 
-use App\Models\DriverLoginSession;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
-use Laravel\Sanctum\NewAccessToken;
 
 class DriverLoginSessionManager
 {
     public function assertAvailable(User $driver): void
     {
-        $this->removeExpiredSession($driver);
         $this->removeExpiredTokens($driver);
 
-        if (DriverLoginSession::query()->where('user_id', $driver->id)->exists()
-            || $driver->tokens()->exists()
-            || $this->hasActiveLegacyWebSession($driver)) {
+        if ($driver->tokens()->exists() || $this->hasActiveWebSession($driver)) {
             throw ValidationException::withMessages([
                 'email' => 'This driver account is already logged in on another device. Log out there before signing in here.',
             ]);
         }
     }
 
-    public function claimApi(User $driver, NewAccessToken $token): void
+    public function claimWeb(User $driver, string $sessionId, Request $request): void
     {
-        $expiration = (int) config('sanctum.expiration');
-        $expiresAt = $token->accessToken->expires_at;
-
-        if ($expiresAt === null && $expiration > 0) {
-            $expiresAt = now()->addMinutes($expiration);
-        }
-
-        DriverLoginSession::query()->create([
+        DB::table(config('session.table', 'sessions'))->insert([
+            'id' => $sessionId,
             'user_id' => $driver->id,
-            'session_identifier' => 'api:'.$token->accessToken->getKey(),
-            'auth_type' => 'api',
-            'expires_at' => $expiresAt,
+            'ip_address' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 500),
+            'payload' => base64_encode(''),
+            'last_activity' => now()->timestamp,
         ]);
     }
 
-    public function claimWeb(User $driver, string $sessionIdentifier): void
+    public function releaseWeb(string $sessionId): void
     {
-        DriverLoginSession::query()->create([
-            'user_id' => $driver->id,
-            'session_identifier' => $sessionIdentifier,
-            'auth_type' => 'web',
-            'expires_at' => now()->addMinutes((int) config('session.lifetime')),
-        ]);
-    }
-
-    public function releaseApi(User $driver, int|string $tokenId): void
-    {
-        DriverLoginSession::query()
-            ->where('user_id', $driver->id)
-            ->where('session_identifier', 'api:'.$tokenId)
-            ->delete();
-    }
-
-    public function releaseWeb(User $driver, ?string $sessionIdentifier): void
-    {
-        if ($sessionIdentifier === null) {
-            return;
-        }
-
-        DriverLoginSession::query()
-            ->where('user_id', $driver->id)
-            ->where('session_identifier', $sessionIdentifier)
-            ->where('auth_type', 'web')
-            ->delete();
-    }
-
-    public function refreshWeb(User $driver, ?string $sessionIdentifier): void
-    {
-        if ($sessionIdentifier === null) {
-            return;
-        }
-
-        DriverLoginSession::query()
-            ->where('user_id', $driver->id)
-            ->where('session_identifier', $sessionIdentifier)
-            ->where('auth_type', 'web')
-            ->update([
-                'expires_at' => now()->addMinutes((int) config('session.lifetime')),
-                'updated_at' => now(),
-            ]);
-    }
-
-    private function removeExpiredSession(User $driver): void
-    {
-        DriverLoginSession::query()
-            ->where('user_id', $driver->id)
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<=', now())
+        DB::table(config('session.table', 'sessions'))
+            ->where('id', $sessionId)
             ->delete();
     }
 
@@ -113,14 +54,16 @@ class DriverLoginSessionManager
             ->delete();
     }
 
-    private function hasActiveLegacyWebSession(User $driver): bool
+    private function hasActiveWebSession(User $driver): bool
     {
-        $table = config('session.table', 'sessions');
-        if (! Schema::hasTable($table) || config('session.driver') !== 'database') {
+        if (config('session.driver') !== 'database') {
             return false;
         }
 
+        $table = config('session.table', 'sessions');
         $lastActivityAfter = now()->subMinutes((int) config('session.lifetime'))->timestamp;
+        $sessions = DB::table($table)->where('user_id', $driver->id);
+        $sessions->where('last_activity', '<', $lastActivityAfter)->delete();
 
         return DB::table($table)
             ->where('user_id', $driver->id)

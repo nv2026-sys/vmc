@@ -7,7 +7,6 @@ use App\Services\AuditLogger;
 use App\Services\DriverLoginSessionManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -45,13 +44,12 @@ class WebAuthController extends Controller
         }
 
         $request->session()->regenerate();
-        $sessionIdentifier = $user->hasRole('VEHICLE_DRIVER') ? (string) Str::uuid() : null;
 
-        DB::transaction(function () use ($user, $auditLogger, $driverSessions, $sessionIdentifier): void {
+        DB::transaction(function () use ($user, $auditLogger, $driverSessions, $request): void {
             $user = User::query()->lockForUpdate()->findOrFail($user->id);
-            if ($sessionIdentifier !== null) {
+            if ($user->hasRole('VEHICLE_DRIVER')) {
                 $driverSessions->assertAvailable($user);
-                $driverSessions->claimWeb($user, $sessionIdentifier);
+                $driverSessions->claimWeb($user, $request->session()->getId(), $request);
             }
 
             $user->forceFill(['last_login_at' => now()])->save();
@@ -59,9 +57,6 @@ class WebAuthController extends Controller
         });
 
         Auth::guard('web')->login($user);
-        if ($sessionIdentifier !== null) {
-            $request->session()->put('driver_login_session_id', $sessionIdentifier);
-        }
 
         return redirect()->intended(route('dashboard'));
     }
@@ -75,10 +70,7 @@ class WebAuthController extends Controller
         $user = $request->user();
         DB::transaction(function () use ($user, $auditLogger, $driverSessions, $request): void {
             if ($user->hasRole('VEHICLE_DRIVER')) {
-                $driverSessions->releaseWeb(
-                    $user,
-                    $request->session()->get('driver_login_session_id'),
-                );
+                $driverSessions->releaseWeb($request->session()->getId());
             }
             $auditLogger->record($user, 'auth.logout', $user, ['method' => 'web']);
         });

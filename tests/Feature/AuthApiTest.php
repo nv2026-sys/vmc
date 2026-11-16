@@ -211,6 +211,7 @@ class AuthApiTest extends TestCase
 
     public function test_driver_api_and_web_logins_share_the_single_device_lock(): void
     {
+        config(['session.driver' => 'database']);
         $driver = User::factory()->create([
             'email' => 'cross-channel-driver@example.com',
             'password' => 'a-strong-test-password',
@@ -234,6 +235,7 @@ class AuthApiTest extends TestCase
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
         ])->assertRedirect(route('dashboard'));
+        $this->assertDatabaseHas('sessions', ['user_id' => $driver->id]);
 
         Auth::forgetGuards();
         $this->withSession([])->postJson('/api/v1/auth/login', [
