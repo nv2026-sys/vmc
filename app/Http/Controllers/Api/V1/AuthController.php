@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\AuditLogger;
 use App\Services\DriverLoginSessionManager;
 use App\Services\VehicleStatusWorkflow;
@@ -85,6 +86,12 @@ class AuthController extends Controller
                     ]);
                 }
 
+                $statusWorkflow->updateForDriver(
+                    $user,
+                    $vehicle,
+                    Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+                );
+                $vehicle->refresh();
                 $trackingWorkflow->recordLocation($user, $vehicle, $gpsData);
             }
 

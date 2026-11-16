@@ -175,7 +175,7 @@ The demo seeder runs only in local/testing environments and is repeatable. It cr
 
 ### Authentication API
 
-- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). A vehicle driver can have only one active session across API and browser logins: another login is rejected until the active device logs out or its session expires. Driver GPS coordinates are recorded for the linked vehicle using the normal On Road tracking rules. The response includes that vehicle's latest location under `data.vehicle.location`.
+- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). A vehicle driver can have only one active session across API and browser logins: another login is rejected until the active device logs out or its session expires. When login includes GPS coordinates, the linked vehicle is marked On Road before the location is recorded. The response includes that vehicle's latest location under `data.vehicle.location`.
 - `GET /api/v1/auth/me` — requires `Authorization: Bearer <token>`; returns the user, role/permission codes, and assigned station IDs.
 - `POST /api/v1/auth/logout` — requires a bearer token and revokes that token.
 

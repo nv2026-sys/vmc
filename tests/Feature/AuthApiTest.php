@@ -97,7 +97,7 @@ class AuthApiTest extends TestCase
             'vehicle_number' => 'LOGIN-GPS-UNIT',
             'vehicle_type' => 'FIRE_ENGINE',
             'status' => Vehicle::STATUS_AVAILABLE,
-            'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+            'operational_status' => Vehicle::OPERATIONAL_STATUS_OFF_ROAD,
         ]);
         $job = EmergencyJob::query()->create([
             'job_id' => 'LOGIN-GPS-INCIDENT',
@@ -132,6 +132,7 @@ class AuthApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.vehicle.id', $vehicle->id)
             ->assertJsonPath('data.vehicle.vehicle_number', 'LOGIN-GPS-UNIT')
+            ->assertJsonPath('data.vehicle.operational_status', Vehicle::OPERATIONAL_STATUS_ON_ROAD)
             ->assertJsonPath('data.vehicle.location.latitude', 22.3072)
             ->assertJsonPath('data.vehicle.location.longitude', 73.1812)
             ->assertJsonPath('data.vehicle.location.recorded_at', $recordedAt->toIso8601String());
@@ -154,6 +155,7 @@ class AuthApiTest extends TestCase
 
         $this->assertSame('22.3072000', $vehicle->fresh()->latitude);
         $this->assertSame('73.1812000', $vehicle->fresh()->longitude);
+        $this->assertSame(Vehicle::OPERATIONAL_STATUS_ON_ROAD, $vehicle->fresh()->operational_status);
         $this->assertDatabaseHas('vehicle_gps_logs', [
             'vehicle_id' => $vehicle->id,
             'received_by' => $driver->id,
