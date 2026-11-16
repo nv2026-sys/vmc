@@ -186,6 +186,7 @@ Login input is normalized and validated. Inactive and unknown accounts receive t
 The mobile driver workflow is authenticated and restricted to the assigned vehicle driver. Assignment actions accept either the numeric assignment ID or the public incident `job_id` in the path:
 
 - `GET /api/v1/driver/assignments/active` — returns the driver's latest active assignment, or `data: null`.
+- `GET /api/v1/fleet/assignments?per_page=15&page=1` — returns every unreleased assignment linked to the authenticated driver, including queued jobs, with pagination metadata. For example, if three jobs are assigned or queued for that driver, all three appear in `data` when `per_page` is at least three. Completed/released assignments are not included.
 - `POST /api/v1/driver/assignments/{assignment}/attend` — sets the active assignment to `EN_ROUTE`; optional device coordinates also record a GPS point.
 - `POST /api/v1/driver/assignments/{assignment}/started` — marks the driver at the incident as `STARTED`; optional reached coordinates and time are supported.
 - `POST /api/v1/driver/assignments/{assignment}/in-progress` — marks the assignment `IN_PROGRESS` (`/{assignment}/IN_PROGRESS` is also supported).

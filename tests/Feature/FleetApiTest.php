@@ -87,6 +87,56 @@ class FleetApiTest extends TestCase
             ->assertJsonCount(0, 'data');
     }
 
+    public function test_fleet_assignments_returns_all_unreleased_jobs_for_the_driver_with_pagination(): void
+    {
+        [, $driver, $station, $ward, $vehicle] = $this->fleetFixture();
+        $jobs = collect(['FLEET-MULTI-01', 'FLEET-MULTI-02', 'FLEET-MULTI-03'])
+            ->map(fn (string $jobId): EmergencyJob => $this->job(User::factory()->create(), $ward, $jobId));
+
+        foreach ($jobs as $index => $job) {
+            JobAssignment::query()->create([
+                'emergency_job_id' => $job->id,
+                'fire_station_id' => $station->id,
+                'vehicle_id' => $vehicle->id,
+                'assigned_driver_user_id' => $driver->id,
+                'assigned_at' => now()->subMinutes($index),
+                'status' => $index === 0
+                    ? JobAssignment::STATUS_ASSIGNED
+                    : JobAssignment::STATUS_QUEUED,
+            ]);
+        }
+
+        $releasedJob = $this->job(User::factory()->create(), $ward, 'FLEET-MULTI-RELEASED');
+        JobAssignment::query()->create([
+            'emergency_job_id' => $releasedJob->id,
+            'fire_station_id' => $station->id,
+            'vehicle_id' => $vehicle->id,
+            'assigned_driver_user_id' => $driver->id,
+            'assigned_at' => now()->subHour(),
+            'released_at' => now()->subMinutes(30),
+            'status' => JobAssignment::STATUS_COMPLETED,
+        ]);
+
+        $this->actingAs($driver, 'sanctum')
+            ->getJson('/api/v1/fleet/assignments?per_page=15&page=1')
+            ->assertOk()
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.per_page', 15)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonCount(3, 'data')
+            ->assertJsonFragment(['job_id' => 'FLEET-MULTI-01'])
+            ->assertJsonFragment(['job_id' => 'FLEET-MULTI-02'])
+            ->assertJsonFragment(['job_id' => 'FLEET-MULTI-03'])
+            ->assertDontSee('FLEET-MULTI-RELEASED');
+
+        $this->getJson('/api/v1/fleet/assignments?per_page=2&page=2')
+            ->assertOk()
+            ->assertJsonPath('meta.current_page', 2)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonCount(1, 'data');
+    }
+
     public function test_fleet_endpoints_are_driver_only_and_notifications_are_private(): void
     {
         [, $driver, $station, $ward, $vehicle, $team] = $this->fleetFixture();

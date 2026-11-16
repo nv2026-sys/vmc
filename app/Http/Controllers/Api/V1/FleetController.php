@@ -36,6 +36,7 @@ class FleetController extends Controller
                 'assignedDriver:id,name',
             ])
             ->orderByDesc('assigned_at')
+            ->orderByDesc('id')
             ->paginate((int) ($validated['per_page'] ?? 15))
             ->withQueryString();
 
