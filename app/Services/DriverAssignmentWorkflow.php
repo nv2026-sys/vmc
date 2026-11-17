@@ -9,6 +9,7 @@ use App\Models\JobStatusHistory;
 use App\Models\User;
 use App\Notifications\DriverAssignmentActionAlert;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,16 +22,18 @@ class DriverAssignmentWorkflow
         private readonly VehicleTrackingWorkflow $trackingWorkflow,
     ) {}
 
-    public function active(User $driver): ?JobAssignment
+    /**
+     * @return Collection<int, JobAssignment>
+     */
+    public function unreleasedAssignments(User $driver): Collection
     {
         $this->ensureDriver($driver);
 
         return $this->assignmentsFor($driver)
             ->whereNull('released_at')
-            ->where('status', '!=', JobAssignment::STATUS_QUEUED)
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
-            ->first();
+            ->get();
     }
 
     public function findActiveAssignment(User $driver, string $identifier): JobAssignment

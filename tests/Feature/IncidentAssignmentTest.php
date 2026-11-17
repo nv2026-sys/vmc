@@ -415,11 +415,16 @@ class IncidentAssignmentTest extends TestCase
             ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_QUEUED);
         $teamQueuedId = $teamQueuedResponse->json('data.assignments.0.id');
 
-        $this->actingAs($driver, 'sanctum')
+        $driverAssignments = $this->actingAs($driver, 'sanctum')
             ->getJson('/api/v1/driver/assignments/active')
             ->assertOk()
             ->assertJsonPath('data.assignmentId', $activeAssignment->id)
-            ->assertJsonPath('data.status', JobAssignment::STATUS_ASSIGNED);
+            ->assertJsonPath('data.status', JobAssignment::STATUS_ASSIGNED)
+            ->assertJsonCount(3, 'assignments');
+        $driverAssignments->assertJsonFragment(['id' => 'VMC-QUEUE-ACTIVE']);
+        $driverAssignments->assertJsonFragment(['id' => 'VMC-QUEUE-NEXT-01']);
+        $driverAssignments->assertJsonFragment(['id' => 'VMC-QUEUE-NEXT-02']);
+        $driverAssignments->assertJsonMissing(['id' => 'VMC-QUEUE-TEAM-ONLY']);
         $this->getJson('/api/v1/fleet/assignments')
             ->assertOk()
             ->assertJsonFragment(['status' => JobAssignment::STATUS_QUEUED]);

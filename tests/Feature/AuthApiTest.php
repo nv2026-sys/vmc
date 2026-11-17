@@ -24,6 +24,7 @@ class AuthApiTest extends TestCase
     {
         parent::setUp();
 
+        config(['session.driver' => 'database']);
         $this->seed(RbacSeeder::class);
     }
 
@@ -235,7 +236,7 @@ class AuthApiTest extends TestCase
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
         ])->assertRedirect(route('dashboard'));
-        $this->assertDatabaseHas('sessions', ['user_id' => $driver->id]);
+        $this->assertDatabaseHas('driver_login_sessions', ['user_id' => $driver->id]);
 
         Auth::forgetGuards();
         $this->withSession([])->postJson('/api/v1/auth/login', [
@@ -243,6 +244,38 @@ class AuthApiTest extends TestCase
             'password' => 'a-strong-test-password',
         ])->assertUnprocessable()
             ->assertJsonPath('errors.email.0', 'This driver account is already logged in on another device. Log out there before signing in here.');
+    }
+
+    public function test_driver_web_login_lock_works_with_non_database_sessions_and_refreshes_activity(): void
+    {
+        config(['session.driver' => 'file']);
+        $driver = User::factory()->create([
+            'email' => 'file-session-driver@example.com',
+            'password' => 'a-strong-test-password',
+        ]);
+        $driver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+
+        $this->post('/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertRedirect(route('dashboard'));
+
+        $this->travel(90)->minutes();
+        $this->get('/login')->assertRedirect(route('dashboard'));
+        $this->assertDatabaseHas('driver_login_sessions', [
+            'user_id' => $driver->id,
+            'last_activity' => now()->timestamp,
+        ]);
+
+        $this->travel(90)->minutes();
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $driver->email,
+            'password' => 'a-strong-test-password',
+        ])->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.email.0',
+                'This driver account is already logged in on another device. Log out there before signing in here.',
+            );
     }
 
     public function test_driver_web_logout_releases_the_single_device_lock(): void

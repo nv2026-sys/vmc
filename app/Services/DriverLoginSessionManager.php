@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class DriverLoginSessionManager
@@ -20,22 +19,20 @@ class DriverLoginSessionManager
         }
     }
 
-    public function claimWeb(User $driver, string $sessionId, Request $request): void
+    public function claimWeb(User $driver, string $sessionId): void
     {
-        DB::table(config('session.table', 'sessions'))->insert([
-            'id' => $sessionId,
+        DB::table('driver_login_sessions')->updateOrInsert([
             'user_id' => $driver->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => mb_substr((string) $request->userAgent(), 0, 500),
-            'payload' => base64_encode(''),
+        ], [
+            'session_id' => $sessionId,
             'last_activity' => now()->timestamp,
         ]);
     }
 
-    public function releaseWeb(string $sessionId): void
+    public function releaseWeb(User $driver): void
     {
-        DB::table(config('session.table', 'sessions'))
-            ->where('id', $sessionId)
+        DB::table('driver_login_sessions')
+            ->where('user_id', $driver->id)
             ->delete();
     }
 
@@ -56,16 +53,11 @@ class DriverLoginSessionManager
 
     private function hasActiveWebSession(User $driver): bool
     {
-        if (config('session.driver') !== 'database') {
-            return false;
-        }
-
-        $table = config('session.table', 'sessions');
         $lastActivityAfter = now()->subMinutes((int) config('session.lifetime'))->timestamp;
-        $sessions = DB::table($table)->where('user_id', $driver->id);
+        $sessions = DB::table('driver_login_sessions')->where('user_id', $driver->id);
         $sessions->where('last_activity', '<', $lastActivityAfter)->delete();
 
-        return DB::table($table)
+        return DB::table('driver_login_sessions')
             ->where('user_id', $driver->id)
             ->where('last_activity', '>=', $lastActivityAfter)
             ->exists();

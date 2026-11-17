@@ -16,13 +16,18 @@ class DriverAssignmentController extends Controller
 
     public function active(Request $request): JsonResponse
     {
-        $assignment = $this->workflow->active($request->user());
-
-        return $this->success(
-            $request,
-            'Active assignment retrieved successfully',
-            $assignment,
+        $driver = $request->user();
+        $assignments = $this->workflow->unreleasedAssignments($driver);
+        $assignment = $assignments->first(
+            fn (JobAssignment $record): bool => $record->status !== JobAssignment::STATUS_QUEUED,
         );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Active assignments retrieved successfully',
+            'data' => $assignment ? $this->assignmentPayload($request, $assignment) : null,
+            'assignments' => DriverAssignmentResource::collection($assignments)->resolve($request),
+        ]);
     }
 
     public function attend(Request $request, string $assignment): JsonResponse

@@ -175,7 +175,7 @@ The demo seeder runs only in local/testing environments and is repeatable. It cr
 
 ### Authentication API
 
-- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). A vehicle driver can have only one active session across API and browser logins: another login is rejected until the active device logs out or its session expires. API sessions are tracked by Sanctum tokens, and browser sessions use Laravel's existing database `sessions` table. When login includes GPS coordinates, the linked vehicle is marked On Road before the location is recorded. The response includes that vehicle's latest location under `data.vehicle.location`.
+- `POST /api/v1/auth/login` — accepts `email`, `password`, optional `device_name`, and optional paired `latitude`/`longitude` GPS coordinates (plus optional `speed_kph` and `recorded_at`). A vehicle driver can have only one active session across API and browser logins: another login is rejected until the active device logs out or its session expires. API sessions are tracked by Sanctum tokens; browser login locks use the dedicated `driver_login_sessions` table regardless of the configured Laravel session backend and are refreshed during web requests. Apply the migration for this table on deployment. When login includes GPS coordinates, the linked vehicle is marked On Road before the location is recorded. The response includes that vehicle's latest location under `data.vehicle.location`.
 - `GET /api/v1/auth/me` — requires `Authorization: Bearer <token>`; returns the user, role/permission codes, and assigned station IDs.
 - `POST /api/v1/auth/logout` — requires a bearer token and revokes that token.
 
@@ -185,7 +185,7 @@ Login input is normalized and validated. Inactive and unknown accounts receive t
 
 The mobile driver workflow is authenticated and restricted to the assigned vehicle driver. Assignment actions accept either the numeric assignment ID or the public incident `job_id` in the path:
 
-- `GET /api/v1/driver/assignments/active` — returns the driver's latest active assignment, or `data: null`.
+- `GET /api/v1/driver/assignments/active` — preserves the driver's latest non-queued assignment in `data` (or `null`) and returns every unreleased assignment for that driver, including queued jobs, in the sibling `assignments` array.
 - `GET /api/v1/fleet/assignments?per_page=15&page=1` — returns every unreleased assignment linked to the authenticated driver, including queued jobs, with pagination metadata. For example, if three jobs are assigned or queued for that driver, all three appear in `data` when `per_page` is at least three. Completed/released assignments are not included.
 - `POST /api/v1/driver/assignments/{assignment}/attend` — sets the active assignment to `EN_ROUTE`; optional device coordinates also record a GPS point.
 - `POST /api/v1/driver/assignments/{assignment}/started` — marks the driver at the incident as `STARTED`; optional reached coordinates and time are supported.

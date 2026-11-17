@@ -49,7 +49,7 @@ class WebAuthController extends Controller
             $user = User::query()->lockForUpdate()->findOrFail($user->id);
             if ($user->hasRole('VEHICLE_DRIVER')) {
                 $driverSessions->assertAvailable($user);
-                $driverSessions->claimWeb($user, $request->session()->getId(), $request);
+                $driverSessions->claimWeb($user, $request->session()->getId());
             }
 
             $user->forceFill(['last_login_at' => now()])->save();
@@ -70,7 +70,7 @@ class WebAuthController extends Controller
         $user = $request->user();
         DB::transaction(function () use ($user, $auditLogger, $driverSessions, $request): void {
             if ($user->hasRole('VEHICLE_DRIVER')) {
-                $driverSessions->releaseWeb($request->session()->getId());
+                $driverSessions->releaseWeb($user);
             }
             $auditLogger->record($user, 'auth.logout', $user, ['method' => 'web']);
         });

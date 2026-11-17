@@ -173,6 +173,9 @@ class UserManagementController extends Controller
             if (! $validated['is_active']
                 || $validated['password'] !== null
                 || $validated['role_code'] !== 'VEHICLE_DRIVER') {
+                DB::table('driver_login_sessions')
+                    ->where('user_id', $managedUser->id)
+                    ->delete();
                 DB::table(config('session.table', 'sessions'))
                     ->where('user_id', $managedUser->id)
                     ->delete();
