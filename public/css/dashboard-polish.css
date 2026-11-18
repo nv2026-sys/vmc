@@ -359,6 +359,52 @@
     font-weight: 700;
 }
 
+.operations-dashboard-layout .ops-help-alert-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.operations-dashboard-layout .ops-help-alert-actions form,
+.operations-dashboard-layout .ops-help-alert-meta form {
+    margin: 0;
+}
+
+.operations-dashboard-layout .ops-help-alert-dismiss,
+.operations-dashboard-layout .ops-help-alert-dismiss-all {
+    padding: 4px 8px;
+    border: 1px solid rgb(255 255 255 / 22%);
+    border-radius: 6px;
+    color: #f4d8d6;
+    background: rgb(255 255 255 / 6%);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.operations-dashboard-layout .ops-help-alert-dismiss:hover,
+.operations-dashboard-layout .ops-help-alert-dismiss-all:hover {
+    border-color: rgb(255 181 166 / 70%);
+    background: rgb(255 255 255 / 12%);
+}
+
+.operations-dashboard-layout .ops-help-alert-dismiss:disabled,
+.operations-dashboard-layout .ops-help-alert-dismiss-all:disabled {
+    cursor: wait;
+    opacity: .6;
+}
+
+.operations-dashboard-layout .ops-help-alert-status:empty {
+    display: none;
+}
+
+.operations-dashboard-layout .ops-help-alert-status {
+    margin: 0;
+    padding: 6px 14px;
+    color: #ffd1c8;
+    font-size: 11px;
+}
+
 .operations-dashboard-layout .ops-help-alert-list {
     display: grid;
 }
@@ -888,6 +934,11 @@
     justify-content: flex-end;
     gap: 8px;
     min-width: 0;
+}
+
+.operations-dashboard-layout .ops-status-refresh-note {
+    color: #a9bfd8;
+    font-size: 10px;
 }
 
 .operations-dashboard-layout .ops-view-toggle {

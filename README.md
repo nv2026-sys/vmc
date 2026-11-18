@@ -27,6 +27,7 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 - Close only unassigned, newly received incidents as duplicates after confirming the original job has the same caller number. The duplicate link and actor are retained as an external reference and audit event.
 - Transfer only unassigned, newly received incidents to 112 with a required external reference number; duplicate and 112 statuses remain distinct.
 - Server-rendered incident registration/detail pages and pending, duplicate, and 112 directories.
+- Full and Quick Call intake support map-picked or manually entered incident coordinates; latitude and longitude must be supplied together.
 - Dashboard carousel rotates recent new-job and incoming-call records, refreshes the permission-scoped feed every 15 seconds, and links directly to the incident.
 - Society/area is stored with each incident, included in location-based public job IDs, and shown with caller and contact details in operational views.
 - Authenticated API endpoints: `GET /api/v1/jobs`, `POST /api/v1/jobs`, `GET /api/v1/callers/search`, `POST /api/v1/jobs/{id}/duplicate`, and `POST /api/v1/jobs/{id}/transfer-112`.
@@ -44,13 +45,13 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 
 ### Phase 5 implementation
 
-- Accept authenticated GPS points for active vehicle assignments, validate geographic, speed, and time ranges, reject stale points, and update the latest vehicle coordinates transactionally. The mobile app should POST the device's current fix every 10 seconds while tracking is active.
+- Accept authenticated GPS points for active vehicle assignments, validate geographic, speed, and time ranges, reject stale points, and update the latest vehicle coordinates transactionally. The mobile app should POST the device's current fix every 15 seconds while tracking is active.
 - Restrict driver uploads and route history to vehicles and assignments tied to their active team membership or leadership; operational tracking respects station scope.
 - Vehicle drivers need to be the leader or an active member of the response team attached to the assignment; assignments without a linked team cannot accept driver GPS uploads.
 - Record the authenticated receiver for each GPS point and audit accepted location updates.
 - Show latest vehicle positions and assignment route history in the tracking page and API; route queries default to the last 24 hours and are capped at 500 points per request.
 - Authenticated API endpoints: `GET /api/v1/tracking`, `GET /api/v1/vehicles/{vehicle}/gps`, and `POST /api/v1/vehicles/{vehicle}/gps`.
-- GPS update payload: `assignment_id` (when assigned), `latitude`, `longitude`, and optional `speed_kph` and device-captured `recorded_at` (ISO 8601). Each accepted POST appends a row to `vehicle_gps_logs` and refreshes the vehicle's latest coordinates. GPS permission denial or network errors should be handled by the mobile app and retried on its next 10-second cycle.
+- GPS update payload: `assignment_id` (when assigned), `latitude`, `longitude`, and optional `speed_kph` and device-captured `recorded_at` (ISO 8601). Each accepted POST appends a row to `vehicle_gps_logs` and refreshes the vehicle's latest coordinates. GPS permission denial or network errors should be handled by the mobile app and retried on its next 15-second cycle.
 
 ### Phase 6 implementation
 
@@ -199,7 +200,7 @@ The mobile driver workflow is authenticated and restricted to the assigned vehic
 - `GET /api/v1/driver/assignments/active` — preserves the driver's latest non-queued assignment in `data` (or `null`) and returns every unreleased assignment for that driver, including queued jobs, in the sibling `assignments` array.
 - `GET /api/v1/driver/assignments/all?ward_id=3` — returns the authenticated driver's assignments except `COMPLETED` and `WORK_DONE`, optionally filtered by ward. Each assignment includes driver `status`, aggregated `incidentStatus`, and `wardId`, `wardName`, and `wardCode`; without the filter, all wards are returned.
 - `GET /api/v1/fleet/assignments?per_page=15&page=1` — returns every unreleased assignment linked to the authenticated driver, including queued jobs, with pagination metadata. For example, if three jobs are assigned or queued for that driver, all three appear in `data` when `per_page` is at least three. Completed/released assignments are not included.
-- `POST /api/v1/driver/assignments/{assignment}/attend` — sets the active assignment to `EN_ROUTE`; optional device coordinates also record a GPS point.
+- `POST /api/v1/driver/assignments/{assignment}/attend` — sets the active assignment to `EN_ROUTE`; optional device coordinates also record a GPS point. A driver may prioritize a `CRITICAL` queued assignment from the app when the same vehicle/driver's current assignment is still `ASSIGNED`; the current one returns to the queue. Overrides are rejected if current work has started or other resources conflict.
 - `POST /api/v1/driver/assignments/{assignment}/started` — marks the driver at the incident as `STARTED`; optional reached coordinates and time are supported.
 - `POST /api/v1/driver/assignments/{assignment}/in-progress` — marks the assignment `IN_PROGRESS` (`/{assignment}/IN_PROGRESS` is also supported).
 - `POST /api/v1/driver/assignments/{assignment}/decline` — declines only a pending assignment and releases its allocation.

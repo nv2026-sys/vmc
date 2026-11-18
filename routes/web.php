@@ -41,9 +41,18 @@ Route::get('/dashboard/map-data', [PageController::class, 'dashboardMapData'])
 Route::get('/dashboard/activity', [PageController::class, 'dashboardActivity'])
     ->middleware(['auth', 'permission:jobs.view'])
     ->name('dashboard.activity');
+Route::get('/dashboard/statuses', [PageController::class, 'dashboardStatuses'])
+    ->middleware(['auth', 'permission:dashboard.view', 'permission:jobs.view'])
+    ->name('dashboard.statuses');
 Route::get('/dashboard/help-requests', [PageController::class, 'dashboardHelpRequests'])
     ->middleware(['auth', 'permission:dashboard.view', 'permission:jobs.view'])
     ->name('dashboard.help-requests');
+Route::post('/dashboard/help-requests/dismiss', [PageController::class, 'dismissAllDriverAlerts'])
+    ->middleware(['auth', 'permission:dashboard.view', 'permission:jobs.view'])
+    ->name('dashboard.help-requests.dismiss-all');
+Route::post('/dashboard/help-requests/{notificationId}/dismiss', [PageController::class, 'dismissDriverAlert'])
+    ->middleware(['auth', 'permission:dashboard.view', 'permission:jobs.view'])
+    ->name('dashboard.help-requests.dismiss');
 
 foreach (['stations', 'wards', 'vehicles', 'teams'] as $kind) {
     Route::middleware(['auth', 'permission:'.$kind.'.manage'])->group(function () use ($kind): void {
@@ -125,6 +134,10 @@ Route::patch('/jobs/{job}/assignments/{assignmentId}/status', [IncidentControlle
     ->whereNumber('assignmentId')
     ->middleware(['auth', 'permission:jobs.update_status'])
     ->name('app.jobs.assignments.status');
+Route::post('/jobs/{job}/reply', [IncidentController::class, 'replyToDriver'])
+    ->whereNumber('job')
+    ->middleware(['auth', 'permission:jobs.update_status'])
+    ->name('app.jobs.reply');
 Route::get('/tracking', [VehicleTrackingController::class, 'index'])
     ->middleware(['auth', 'permission:gps.view'])
     ->name('app.tracking');

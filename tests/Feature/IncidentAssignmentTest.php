@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\EmergencyJob;
 use App\Models\FireStation;
 use App\Models\JobAssignment;
+use App\Models\JobRemark;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
@@ -509,6 +510,43 @@ class IncidentAssignmentTest extends TestCase
         $this->assertSame(JobAssignment::STATUS_ASSIGNED, $queuedAssignment->fresh()->status);
     }
 
+    public function test_off_road_busy_vehicle_can_be_queued_with_its_current_driver(): void
+    {
+        [$operator, $station, $ward] = $this->operatorWithStation();
+        $driver = $this->driverAt($station);
+        $vehicle = $this->vehicle($station, 'VMC-QUEUE-OFF-ROAD-PAIR');
+        $vehicle->update([
+            'status' => Vehicle::STATUS_DEPLOYED,
+            'operational_status' => Vehicle::OPERATIONAL_STATUS_OFF_ROAD,
+        ]);
+        $activeJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-OFF-ROAD-PAIR-ACTIVE');
+        JobAssignment::query()->create([
+            'emergency_job_id' => $activeJob->id,
+            'fire_station_id' => $station->id,
+            'vehicle_id' => $vehicle->id,
+            'assigned_driver_user_id' => $driver->id,
+            'assigned_by' => $operator->id,
+            'assigned_at' => now()->subMinute(),
+            'status' => JobAssignment::STATUS_ASSIGNED,
+        ]);
+        $queuedJob = $this->assignedJob($operator, $ward, 'VMC-QUEUE-OFF-ROAD-PAIR-NEXT');
+
+        $this->actingAs($operator, 'sanctum')
+            ->get(route('app.jobs.show', $queuedJob))
+            ->assertOk()
+            ->assertSee($vehicle->vehicle_number);
+
+        $this->postJson('/api/v1/jobs/'.$queuedJob->id.'/assignments', [
+            'assignments' => [[
+                'fire_station_id' => $station->id,
+                'vehicle_id' => $vehicle->id,
+                'driver_user_id' => $driver->id,
+            ]],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.assignments.0.status', JobAssignment::STATUS_QUEUED);
+    }
+
     public function test_dispatcher_cannot_assign_an_explicitly_off_road_vehicle(): void
     {
         [$operator, $station, $ward] = $this->operatorWithStation();
@@ -661,7 +699,7 @@ class IncidentAssignmentTest extends TestCase
             ->assertOk()
             ->assertSee('<select name="status">', false)
             ->assertSee('<option value="'.JobAssignment::STATUS_COMPLETED.'"', false)
-            ->assertSee('Update note');
+            ->assertSee('Status update note');
 
         $this->patch(route('app.jobs.assignments.status', [$job->id, $assignment->id]), [
             'status' => JobAssignment::STATUS_EN_ROUTE,
@@ -693,6 +731,73 @@ class IncidentAssignmentTest extends TestCase
             ->assertSee($driver->name)
             ->assertSee('Response units')
             ->assertSee('Add another vehicle');
+    }
+
+    public function test_incident_detail_shows_help_escalation_and_control_room_replies(): void
+    {
+        [$operator, $station, $ward] = $this->operatorWithStation();
+        $driver = $this->driverAt($station);
+        $job = $this->assignedJob($operator, $ward, 'VMC-DRIVER-HELP-REMARK');
+        $assignment = $this->assignment($station, $job, 'VMC-HELP-REMARK-01', null, $driver);
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$assignment->id.'/escalate', [
+                'reason' => 'Additional equipment required.',
+            ])
+            ->assertOk();
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$assignment->id.'/need-help', [
+                'helpType' => 'AMBULANCE',
+                'comments' => 'A patient needs urgent medical transport.',
+            ])
+            ->assertOk();
+
+        $this->actingAs($operator, 'sanctum')
+            ->patchJson('/api/v1/jobs/'.$job->id.'/assignments/'.$assignment->id.'/status', [
+                'status' => JobAssignment::STATUS_EN_ROUTE,
+                'remarks' => 'Control room dispatched an ambulance.',
+            ])
+            ->assertOk();
+
+        $statusBeforeReply = $assignment->fresh()->status;
+        $this->actingAs($operator)
+            ->post(route('app.jobs.reply', $job), [
+                'assignment_id' => $assignment->id,
+                'reply' => 'Ambulance has been dispatched to your location.',
+            ])
+            ->assertRedirect(route('app.jobs.show', $job).'#incident-conversation');
+
+        $this->assertSame($statusBeforeReply, $assignment->fresh()->status);
+        $this->assertDatabaseHas('job_status_history', [
+            'emergency_job_id' => $job->id,
+            'job_assignment_id' => $assignment->id,
+            'changed_by' => $operator->id,
+            'remarks' => 'Ambulance has been dispatched to your location.',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $driver->id,
+            'type' => DriverRemarkReplyAlert::class,
+        ]);
+
+        $remark = JobRemark::query()->where('emergency_job_id', $job->id)->firstOrFail();
+        $this->actingAs($operator)
+            ->get(route('app.jobs.show', $job))
+            ->assertOk()
+            ->assertSee('Incident conversation')
+            ->assertSee('name="reply"', false)
+            ->assertSee('Send reply')
+            ->assertSee('Escalation')
+            ->assertSee('Additional equipment required.')
+            ->assertSee('Help request')
+            ->assertSee('Control room reply')
+            ->assertSee('Control room dispatched an ambulance.')
+            ->assertSee('Ambulance has been dispatched to your location.')
+            ->assertSee($operator->name)
+            ->assertSee($driver->name)
+            ->assertDontSee('Driver action [need_help]')
+            ->assertSee('A patient needs urgent medical transport.')
+            ->assertSee($remark->created_at->format('M j, Y g:i A'));
     }
 
     /**

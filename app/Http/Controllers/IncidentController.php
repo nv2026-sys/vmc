@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AssignJobResourcesRequest;
 use App\Http\Requests\CloseDuplicateIncidentRequest;
 use App\Http\Requests\CreateIncidentRequest;
+use App\Http\Requests\ReplyToDriverRequest;
 use App\Http\Requests\TransferIncidentTo112Request;
 use App\Http\Requests\UpdateAssignmentStatusRequest;
 use App\Models\EmergencyJob;
@@ -107,15 +108,70 @@ class IncidentController extends Controller
             'assignments.teamLeader',
             'assignments.assignedDriver:id,name',
             'assignments.assigner:id,name',
+            'assignments.actionEvents.actor:id,name',
             'statusHistory.actor:id,name',
             'statusHistory.assignment.vehicle:id,vehicle_number',
+            'statusHistory.assignment.assignedDriver:id,name',
+            'remarksHistory' => fn ($remarks) => $remarks
+                ->with('user:id,name')
+                ->orderBy('created_at'),
             'externalReferences.creator:id,name',
         ]);
+        $communicationActivity = $job->assignments->flatMap(fn ($assignment) => $assignment->actionEvents
+            ->whereIn('action', ['need_help', 'escalated'])
+            ->map(fn ($event): array => [
+                'type' => $event->action,
+                'occurred_at' => $event->occurred_at,
+                'assignment_id' => $assignment->id,
+                'vehicle_number' => $assignment->vehicle?->vehicle_number,
+                'actor' => $event->actor?->name ?? 'Driver unavailable',
+                'details' => $event->details ?? [],
+            ]));
+        $communicationActivity = $communicationActivity->concat(
+            $job->statusHistory
+                ->filter(fn ($history): bool => trim((string) $history->remarks) !== ''
+                    && $history->assignment?->assignedDriver !== null
+                    && $history->actor !== null
+                    && (int) $history->actor->id !== (int) $history->assignment->assigned_driver_user_id)
+                ->map(fn ($history): array => [
+                    'type' => 'reply',
+                    'occurred_at' => $history->changed_at,
+                    'assignment_id' => $history->job_assignment_id,
+                    'vehicle_number' => $history->assignment?->vehicle?->vehicle_number,
+                    'actor' => $history->actor?->name ?? 'Control room',
+                    'details' => ['reply' => $history->remarks],
+                ]),
+        )->concat(
+            $job->remarksHistory
+                ->reject(fn ($remark): bool => preg_match(
+                    '/^Driver action \[(?:need_help|escalated)\] assignment #\d+:/',
+                    $remark->body,
+                ) === 1)
+                ->map(function ($remark): array {
+                    $body = preg_replace('/^Driver action \[[^\]]+\] assignment #\d+:\s*/', '', $remark->body);
+
+                    return [
+                        'type' => 'driver_remark',
+                        'occurred_at' => $remark->created_at,
+                        'assignment_id' => null,
+                        'vehicle_number' => null,
+                        'actor' => $remark->user?->name ?? 'Driver unavailable',
+                        'details' => ['message' => $body ?? $remark->body],
+                    ];
+                }),
+        )->sortBy('occurred_at')->values();
         $canAssign = $request->user()->hasPermission('jobs.assign')
             && in_array($job->status, [EmergencyJob::STATUS_RECEIVED, EmergencyJob::STATUS_ASSIGNED], true);
 
         return view('incidents.show', [
             'job' => $job,
+            'communicationActivity' => $communicationActivity,
+            'replyableAssignments' => $job->assignments
+                ->filter(fn ($assignment): bool => $request->user()->hasPermission('jobs.update_status')
+                    && $assignment->assigned_driver_user_id !== null
+                    && (int) $assignment->assigned_driver_user_id !== (int) $request->user()->id
+                    && $this->workflow->canUpdateAssignment($request->user(), $assignment))
+                ->values(),
             'assignableStations' => $canAssign ? $this->workflow->assignableStations($request->user(), $job) : collect(),
             'canAssign' => $canAssign,
             'updatableAssignmentIds' => $job->assignments
@@ -180,5 +236,19 @@ class IncidentController extends Controller
         );
 
         return redirect()->route('app.jobs.show', $job)->with('status', 'Unit status updated.');
+    }
+
+    public function replyToDriver(ReplyToDriverRequest $request, EmergencyJob $job)
+    {
+        $validated = $request->validated();
+        $this->workflow->replyToDriver(
+            $request->user(),
+            $job,
+            (int) $validated['assignment_id'],
+            $validated['reply'],
+        );
+
+        return redirect()->to(route('app.jobs.show', $job).'#incident-conversation')
+            ->with('status', 'Reply sent to driver.');
     }
 }

@@ -15,8 +15,9 @@
     <link rel="stylesheet" href="{{ asset('css/reports.css') }}">
     <link rel="stylesheet" href="{{ asset('css/dashboard-polish.css') }}?v={{ filemtime(public_path('css/dashboard-polish.css')) }}">
     <link rel="stylesheet" href="{{ asset('css/accessibility-typography.css') }}?v={{ filemtime(public_path('css/accessibility-typography.css')) }}">
+    @stack('styles')
 </head>
-<body class="operations-dashboard-page {{ request()->routeIs('dashboard') || request()->routeIs('home') ? 'operations-dashboard-layout' : '' }}">
+<body class="operations-dashboard-page {{ request()->routeIs('dashboard') || request()->routeIs('home') ? 'operations-dashboard-layout' : '' }} {{ request()->routeIs('app.jobs.show') ? 'incident-detail-layout' : '' }}">
 @php
     $currentUser = auth()->user();
     $currentUser?->loadMissing('roles.permissions');

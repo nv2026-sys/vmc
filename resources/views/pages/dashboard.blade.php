@@ -25,8 +25,15 @@
             aria-live="polite" @if ($helpRequests->isEmpty()) hidden @endif>
             <div class="ops-panel-heading">
                 <div><h2 id="help-alerts-heading">Driver alerts</h2><p>Help requests and escalations from response units</p></div>
-                <span class="ops-help-alert-count" data-help-request-count>{{ $helpRequests->count() }} recent</span>
+                <div class="ops-help-alert-actions">
+                    <span class="ops-help-alert-count" data-help-request-count>{{ $helpRequests->count() }} recent</span>
+                    <form method="POST" action="{{ route('dashboard.help-requests.dismiss-all') }}" data-help-alert-dismiss-all>
+                        @csrf
+                        <button class="ops-help-alert-dismiss-all" type="submit">Dismiss all</button>
+                    </form>
+                </div>
             </div>
+            <p class="ops-help-alert-status" data-help-alert-status role="status" aria-live="polite"></p>
             <div class="ops-help-alert-list" data-help-alert-list>
                 @foreach ($helpRequests as $helpRequest)
                     @php($alert = $helpRequest->data)
@@ -50,6 +57,10 @@
                             @if (! empty($alert['incident_id']))
                                 <a href="{{ route('app.jobs.show', $alert['incident_id']) }}">View incident</a>
                             @endif
+                            <form method="POST" action="{{ route('dashboard.help-requests.dismiss', $helpRequest->id) }}" data-help-alert-dismiss>
+                                @csrf
+                                <button class="ops-help-alert-dismiss" type="submit">Dismiss</button>
+                            </form>
                         </div>
                     </article>
                 @endforeach
@@ -66,7 +77,7 @@
         @endforeach
     </div>
 
-    <section class="ops-panel ops-incidents-panel">
+    <section class="ops-panel ops-incidents-panel" data-status-endpoint="{{ route('dashboard.statuses') }}">
         <div class="ops-panel-heading ops-incidents-titlebar">
             <div class="ops-incidents-title-main">
                 <div><h2>Recent incidents</h2><p>Latest incidents in your authorized scope</p></div>
@@ -97,6 +108,7 @@
                         <button type="button" data-incident-view="map" aria-pressed="false">Map View</button>
                     </div>
                 @endif
+                <span class="ops-status-refresh-note" data-status-refresh-note>Statuses update every 15 seconds</span>
             </div>
         </div>
         <div class="ops-table-wrap ops-incidents-table-wrap" data-incident-view-panel="table">
@@ -131,7 +143,7 @@
                                     <span class="ops-muted-value">Unassigned</span>
                                 @endif
                             </td>
-                            <td><span class="ops-incident-status is-{{ strtolower($job->status) }}">{{ str_replace('_', ' ', $job->status) }}</span></td>
+                            <td><span class="ops-incident-status is-{{ strtolower($job->status) }}" data-incident-status>{{ str_replace('_', ' ', $job->status) }}</span></td>
                             <td><time datetime="{{ $job->occurred_at->toIso8601String() }}">{{ $job->occurred_at->diffForHumans(now(), true) }}</time></td>
                             <td><a class="ops-incident-action" href="{{ route('app.jobs.show', $job) }}">View <span aria-hidden="true">→</span></a></td>
                         </tr>
@@ -239,10 +251,10 @@
                             @php($gpsLog = $vehicle->latestGpsLog)
                             @php($mapAssignment = $vehicle->assignments->first())
                             @php($displayStatus = \App\Services\VehicleDisplayStatus::describe($vehicle, $mapAssignment))
-                            <tr data-vehicle-row="{{ $vehicle->vehicle_number }}" data-map-vehicle="{{ $vehicle->vehicle_number }}" data-map-ward-id="{{ $mapAssignment?->emergencyJob?->ward_id }}">
+                            <tr data-vehicle-row="{{ $vehicle->vehicle_number }}" data-vehicle-id="{{ $vehicle->id }}" data-map-vehicle="{{ $vehicle->vehicle_number }}" data-map-ward-id="{{ $mapAssignment?->emergencyJob?->ward_id }}">
                                 <td>{{ $loop->iteration }}</td>
                                 <td><strong>{{ $vehicle->vehicle_number }}</strong><small>{{ str_replace('_', ' ', $vehicle->vehicle_type) }}</small></td>
-                                <td><span class="vehicle-status-badge is-{{ $displayStatus['class'] }}">{{ $displayStatus['label'] }}</span></td>
+                                <td><span class="vehicle-status-badge is-{{ $displayStatus['class'] }}" data-vehicle-status>{{ $displayStatus['label'] }}</span></td>
                                 <td>
                                     @if (auth()->user()?->hasPermission('jobs.view'))
                                         <a class="vehicle-ticket-count" href="{{ url('/vehicles/'.$vehicle->id.'#open-assignments') }}" aria-label="View {{ $vehicle->open_tickets_count }} open tickets for {{ $vehicle->vehicle_number }}">{{ number_format($vehicle->open_tickets_count) }}</a>
@@ -353,6 +365,71 @@
     }
 })();
 </script>
+<script>
+(() => {
+    const panel = document.querySelector('[data-status-endpoint]');
+    if (!panel) return;
+
+    const updateNote = panel.querySelector('[data-status-refresh-note]');
+    let refreshing = false;
+
+    const refreshStatuses = async () => {
+        if (document.hidden || refreshing) return;
+
+        const parameters = new URLSearchParams();
+        document.querySelectorAll('[data-incident-row]').forEach((row) => {
+            parameters.append('incident_ids[]', row.dataset.incidentRow);
+        });
+        document.querySelectorAll('[data-vehicle-id]').forEach((row) => {
+            parameters.append('vehicle_ids[]', row.dataset.vehicleId);
+        });
+
+        refreshing = true;
+        try {
+            const response = await fetch(`${panel.dataset.statusEndpoint}?${parameters.toString()}`, {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) {
+                throw new Error(`Dashboard status refresh failed with HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            const incidents = new Map((result.data.incidents || []).map((incident) => [incident.job_id, incident]));
+            document.querySelectorAll('[data-incident-row]').forEach((row) => {
+                const incident = incidents.get(row.dataset.incidentRow);
+                const badge = row.querySelector('[data-incident-status]');
+                if (!incident || !badge) return;
+
+                badge.className = `ops-incident-status is-${incident.status.toLowerCase()}`;
+                badge.textContent = incident.status.replace(/_/g, ' ');
+            });
+
+            const vehicles = new Map((result.data.vehicles || []).map((vehicle) => [String(vehicle.id), vehicle]));
+            document.querySelectorAll('[data-vehicle-id]').forEach((row) => {
+                const vehicle = vehicles.get(row.dataset.vehicleId);
+                const badge = row.querySelector('[data-vehicle-status]');
+                if (!vehicle || !badge) return;
+
+                badge.className = `vehicle-status-badge is-${vehicle.class}`;
+                badge.textContent = vehicle.label;
+            });
+
+            updateNote.textContent = `Statuses update every 15 seconds · Updated ${new Date().toLocaleTimeString()}`;
+        } catch (error) {
+            console.error('Dashboard statuses could not be refreshed.', error);
+            updateNote.textContent = 'Status refresh failed; retrying automatically.';
+        } finally {
+            refreshing = false;
+        }
+    };
+
+    refreshStatuses();
+    window.setInterval(refreshStatuses, 15000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) refreshStatuses();
+    });
+})();
+</script>
 @if (auth()->user()?->hasPermission('jobs.view'))
 <script>
 (() => {
@@ -361,6 +438,8 @@
 
     const list = panel.querySelector('[data-help-alert-list]');
     const count = panel.querySelector('[data-help-request-count]');
+    const status = panel.querySelector('[data-help-alert-status]');
+    const dismissAllForm = panel.querySelector('[data-help-alert-dismiss-all]');
     const renderAlert = (alert) => {
         const item = document.createElement('article');
         item.className = 'ops-help-alert';
@@ -404,10 +483,63 @@
             link.textContent = 'View incident';
             meta.append(link);
         }
+        const dismissForm = document.createElement('form');
+        dismissForm.method = 'POST';
+        dismissForm.action = alert.dismiss_url;
+        dismissForm.dataset.helpAlertDismiss = '';
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = '_token';
+        csrf.value = dismissAllForm.querySelector('input[name="_token"]').value;
+        const dismissButton = document.createElement('button');
+        dismissButton.className = 'ops-help-alert-dismiss';
+        dismissButton.type = 'submit';
+        dismissButton.textContent = 'Dismiss';
+        dismissForm.append(csrf, dismissButton);
+        meta.append(dismissForm);
         item.append(meta);
 
         return item;
     };
+
+    panel.addEventListener('submit', async (event) => {
+        const form = event.target.closest('form[data-help-alert-dismiss], form[data-help-alert-dismiss-all]');
+        if (!form) return;
+
+        event.preventDefault();
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        status.textContent = '';
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+            });
+            if (!response.ok) {
+                throw new Error(`Driver alert dismissal failed with HTTP ${response.status}`);
+            }
+
+            if (form.matches('[data-help-alert-dismiss-all]')) {
+                list.replaceChildren();
+            } else {
+                form.closest('.ops-help-alert')?.remove();
+            }
+
+            const remaining = list.children.length;
+            count.textContent = `${remaining} recent`;
+            panel.hidden = remaining === 0;
+            status.textContent = remaining === 0 ? 'Driver alerts dismissed.' : 'Driver alert dismissed.';
+            if (!panel.hidden) {
+                await refreshHelpRequests();
+            }
+        } catch (error) {
+            console.error('Driver alert could not be dismissed.', error);
+            status.textContent = 'The alert could not be dismissed. Please try again.';
+            button.disabled = false;
+        }
+    });
 
     const refreshHelpRequests = async () => {
         try {

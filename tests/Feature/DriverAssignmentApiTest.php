@@ -244,7 +244,10 @@ class DriverAssignmentApiTest extends TestCase
             ->assertSee($assignment->vehicle->vehicle_number)
             ->assertSee($job->job_id)
             ->assertSee('A patient needs urgent medical transport.')
-            ->assertSee('View incident');
+            ->assertSee('View incident')
+            ->assertSee('Statuses update every 15 seconds')
+            ->assertSee('Dismiss')
+            ->assertSee('Dismiss all');
 
         $this->getJson(route('dashboard.help-requests'))
             ->assertOk()
@@ -256,6 +259,91 @@ class DriverAssignmentApiTest extends TestCase
             ->get('/dashboard')
             ->assertOk()
             ->assertDontSee($job->job_id);
+    }
+
+    public function test_control_room_can_dismiss_its_driver_alerts_without_deleting_notifications(): void
+    {
+        $controlRoom = User::factory()->create();
+        $controlRoom->roles()->attach(Role::query()->where('code', 'CONTROL_ROOM_ADMIN')->value('id'));
+        $otherControlRoom = User::factory()->create();
+        $otherControlRoom->roles()->attach(Role::query()->where('code', 'CONTROL_ROOM_ADMIN')->value('id'));
+
+        $alert = $controlRoom->notifications()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'type' => DriverAssignmentActionAlert::class,
+            'data' => ['action' => 'need_help', 'job_id' => 'VMC-DISMISS-01'],
+        ]);
+        $otherAlert = $otherControlRoom->notifications()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'type' => DriverAssignmentActionAlert::class,
+            'data' => ['action' => 'need_help', 'job_id' => 'VMC-OTHER-DISMISS-01'],
+        ]);
+        $unrelatedNotification = $controlRoom->notifications()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'type' => DriverAssignmentActionAlert::class,
+            'data' => ['action' => 'assigned', 'job_id' => 'VMC-UNRELATED-01'],
+        ]);
+
+        $this->actingAs($controlRoom)
+            ->getJson(route('dashboard.help-requests'))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $alert->id);
+
+        $this->postJson(route('dashboard.help-requests.dismiss', $alert->id))
+            ->assertOk()
+            ->assertJsonPath('dismissed', true);
+
+        $this->assertNotNull($alert->fresh()->read_at);
+        $this->assertDatabaseHas('notifications', ['id' => $alert->id]);
+        $this->assertNull($otherAlert->fresh()->read_at);
+        $this->assertNull($unrelatedNotification->fresh()->read_at);
+
+        $bulkAlert = $controlRoom->notifications()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'type' => DriverAssignmentActionAlert::class,
+            'data' => ['action' => 'escalated', 'job_id' => 'VMC-DISMISS-02'],
+        ]);
+
+        $this->postJson(route('dashboard.help-requests.dismiss-all'))
+            ->assertOk()
+            ->assertJsonPath('dismissed', 1);
+
+        $this->assertNotNull($bulkAlert->fresh()->read_at);
+        $this->assertNull($unrelatedNotification->fresh()->read_at);
+        $this->getJson(route('dashboard.help-requests'))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($otherControlRoom)
+            ->postJson(route('dashboard.help-requests.dismiss', $alert->id))
+            ->assertNotFound();
+
+        $this->actingAs($otherControlRoom)
+            ->postJson(route('dashboard.help-requests.dismiss', $otherAlert->id))
+            ->assertOk();
+    }
+
+    public function test_dashboard_status_endpoint_returns_current_incident_and_vehicle_statuses(): void
+    {
+        [, , $job, $vehicle, $assignment] = $this->assignmentFixture('DASHBOARD-STATUS-01');
+        $controlRoom = User::factory()->create();
+        $controlRoom->roles()->attach(Role::query()->where('code', 'CONTROL_ROOM_ADMIN')->value('id'));
+
+        $job->update(['status' => EmergencyJob::STATUS_IN_PROGRESS]);
+        $assignment->update(['status' => JobAssignment::STATUS_IN_PROGRESS]);
+
+        $this->actingAs($controlRoom)
+            ->getJson(route('dashboard.statuses', [
+                'incident_ids' => [$job->job_id],
+                'vehicle_ids' => [$vehicle->id],
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.incidents.0.job_id', $job->job_id)
+            ->assertJsonPath('data.incidents.0.status', EmergencyJob::STATUS_IN_PROGRESS)
+            ->assertJsonPath('data.vehicles.0.id', $vehicle->id)
+            ->assertJsonPath('data.vehicles.0.label', 'At Incident / On Site')
+            ->assertJsonPath('data.vehicles.0.class', 'at_incident');
     }
 
     public function test_driver_can_decline_only_a_pending_assignment_and_incident_returns_to_received(): void
@@ -354,6 +442,95 @@ class DriverAssignmentApiTest extends TestCase
         $this->postJson('/api/v1/driver/assignments/'.$activeAssignmentId.'/close', [
             'closeReason' => 'Returning to station.',
         ])->assertOk()->assertJsonPath('data.status', JobAssignment::STATUS_WORK_DONE);
+    }
+
+    public function test_driver_can_prioritize_critical_queued_assignment_before_unstarted_work(): void
+    {
+        [$driver, , $currentJob, $vehicle, $currentAssignment] = $this->assignmentFixture('DRIVER-CRITICAL-CURRENT');
+        $vehicle->update(['status' => Vehicle::STATUS_DEPLOYED]);
+
+        $criticalJob = $currentJob->replicate();
+        $criticalJob->job_id = 'DRIVER-CRITICAL-QUEUED';
+        $criticalJob->priority = 'CRITICAL';
+        $criticalJob->save();
+        $criticalAssignment = $currentAssignment->replicate();
+        $criticalAssignment->emergency_job_id = $criticalJob->id;
+        $criticalAssignment->assigned_at = now()->addMinute();
+        $criticalAssignment->status = JobAssignment::STATUS_QUEUED;
+        $criticalAssignment->save();
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$criticalAssignment->id.'/attend')
+            ->assertOk()
+            ->assertJsonPath('data.assignmentId', $criticalAssignment->id)
+            ->assertJsonPath('data.status', JobAssignment::STATUS_EN_ROUTE);
+
+        $this->assertSame(JobAssignment::STATUS_QUEUED, $currentAssignment->fresh()->status);
+        $this->assertSame(EmergencyJob::STATUS_ASSIGNED, $currentJob->fresh()->status);
+        $this->assertSame(JobAssignment::STATUS_EN_ROUTE, $criticalAssignment->fresh()->status);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $currentAssignment->id,
+            'previous_status' => JobAssignment::STATUS_ASSIGNED,
+            'new_status' => JobAssignment::STATUS_QUEUED,
+        ]);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $criticalAssignment->id,
+            'previous_status' => JobAssignment::STATUS_QUEUED,
+            'new_status' => JobAssignment::STATUS_ASSIGNED,
+        ]);
+        $this->assertDatabaseHas('job_status_history', [
+            'job_assignment_id' => $criticalAssignment->id,
+            'previous_status' => JobAssignment::STATUS_ASSIGNED,
+            'new_status' => JobAssignment::STATUS_EN_ROUTE,
+        ]);
+    }
+
+    public function test_driver_cannot_prioritize_critical_queue_if_current_assignment_has_started(): void
+    {
+        [$driver, , $currentJob, $vehicle, $currentAssignment] = $this->assignmentFixture('DRIVER-CRITICAL-STARTED');
+        $currentAssignment->update(['status' => JobAssignment::STATUS_EN_ROUTE]);
+        $currentJob->update(['status' => EmergencyJob::STATUS_EN_ROUTE]);
+        $vehicle->update(['status' => Vehicle::STATUS_DEPLOYED]);
+
+        $criticalJob = $currentJob->replicate();
+        $criticalJob->job_id = 'DRIVER-CRITICAL-BLOCKED';
+        $criticalJob->priority = 'CRITICAL';
+        $criticalJob->save();
+        $criticalAssignment = $currentAssignment->replicate();
+        $criticalAssignment->emergency_job_id = $criticalJob->id;
+        $criticalAssignment->assigned_at = now()->addMinute();
+        $criticalAssignment->status = JobAssignment::STATUS_QUEUED;
+        $criticalAssignment->save();
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$criticalAssignment->id.'/attend')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('assignment');
+
+        $this->assertSame(JobAssignment::STATUS_EN_ROUTE, $currentAssignment->fresh()->status);
+        $this->assertSame(JobAssignment::STATUS_QUEUED, $criticalAssignment->fresh()->status);
+    }
+
+    public function test_driver_cannot_prioritize_noncritical_queued_assignment(): void
+    {
+        [$driver, , $currentJob, , $currentAssignment] = $this->assignmentFixture('DRIVER-NONCRITICAL-CURRENT');
+        $queuedJob = $currentJob->replicate();
+        $queuedJob->job_id = 'DRIVER-NONCRITICAL-QUEUED';
+        $queuedJob->priority = 'HIGH';
+        $queuedJob->save();
+        $queuedAssignment = $currentAssignment->replicate();
+        $queuedAssignment->emergency_job_id = $queuedJob->id;
+        $queuedAssignment->assigned_at = now()->addMinute();
+        $queuedAssignment->status = JobAssignment::STATUS_QUEUED;
+        $queuedAssignment->save();
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/driver/assignments/'.$queuedAssignment->id.'/attend')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('assignment');
+
+        $this->assertSame(JobAssignment::STATUS_ASSIGNED, $currentAssignment->fresh()->status);
+        $this->assertSame(JobAssignment::STATUS_QUEUED, $queuedAssignment->fresh()->status);
     }
 
     public function test_declining_one_assignment_does_not_reopen_an_incident_with_another_active_vehicle(): void

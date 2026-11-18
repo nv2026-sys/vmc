@@ -87,6 +87,20 @@ class IncidentRegistrationTest extends TestCase
         ]);
     }
 
+    public function test_incident_coordinates_must_be_submitted_as_a_valid_pair(): void
+    {
+        [$operator, $ward] = $this->operatorWithWard();
+
+        $this->actingAs($operator, 'sanctum')
+            ->postJson('/api/v1/jobs', $this->incidentData($ward, [
+                'longitude' => null,
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('longitude');
+
+        $this->assertDatabaseCount('emergency_jobs', 0);
+    }
+
     public function test_incident_can_be_transferred_to_112_with_an_external_reference(): void
     {
         [$operator, $ward] = $this->operatorWithWard();
@@ -150,7 +164,9 @@ class IncidentRegistrationTest extends TestCase
             ->get('/jobs/new')
             ->assertOk()
             ->assertSee('Register an emergency')
-            ->assertSee('Caller lookup');
+            ->assertSee('Caller lookup')
+            ->assertSee('Incident / pickup location')
+            ->assertSee('incident-location-picker.js');
 
         $response = $this->post('/jobs', $this->incidentData($ward));
         $job = EmergencyJob::query()->sole();

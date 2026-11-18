@@ -78,8 +78,7 @@
                 </label>
                 <label>Society / area<input name="society_name" value="{{ old('society_name') }}" required maxlength="255" placeholder="Society, neighborhood or landmark"></label>
                 <label class="field-wide">Incident address<textarea name="incident_address" required maxlength="2000" rows="3">{{ old('incident_address') }}</textarea></label>
-                <label>Latitude<input type="number" name="latitude" value="{{ old('latitude') }}" min="-90" max="90" step="any"></label>
-                <label>Longitude<input type="number" name="longitude" value="{{ old('longitude') }}" min="-180" max="180" step="any"></label>
+                @include('incidents.partials.location-picker')
                 <label class="field-wide">Intake remarks<textarea name="remarks" maxlength="5000" rows="3">{{ old('remarks') }}</textarea></label>
             </div>
             <div class="form-actions"><a class="button button-light" href="{{ route('app.jobs') }}">Cancel</a><button class="button button-primary" type="submit">Create incident</button></div>

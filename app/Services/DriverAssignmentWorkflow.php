@@ -86,6 +86,13 @@ class DriverAssignmentWorkflow
     public function attend(User $driver, string $identifier, array $data): JobAssignment
     {
         return DB::transaction(function () use ($driver, $identifier, $data): JobAssignment {
+            $selected = $this->assignmentQuery($driver, $identifier)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($selected->status === JobAssignment::STATUS_QUEUED) {
+                $this->incidentWorkflow->prioritizeCriticalQueuedAssignment($driver, (int) $selected->id);
+            }
+
             $assignment = $this->findActiveAssignment($driver, $identifier);
             $location = $this->recordGps($driver, $assignment, $data, 'driverLatitude', 'driverLongitude');
             $this->incidentWorkflow->updateAssignmentStatus($driver, $assignment->emergencyJob, $assignment->id, [

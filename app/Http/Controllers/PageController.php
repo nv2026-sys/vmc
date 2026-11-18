@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -412,6 +413,66 @@ class PageController extends Controller
         ]);
     }
 
+    public function dashboardStatuses(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'incident_ids' => ['sometimes', 'array', 'max:20'],
+            'incident_ids.*' => ['string', 'max:100', 'distinct'],
+            'vehicle_ids' => ['sometimes', 'array', 'max:20'],
+            'vehicle_ids.*' => ['integer', 'distinct'],
+        ]);
+        $user = $request->user();
+        $incidentIds = $validated['incident_ids'] ?? [];
+        $incidents = $this->visibleJobs($user)
+            ->whereIn('job_id', $incidentIds)
+            ->get(['job_id', 'status'])
+            ->map(fn (EmergencyJob $job): array => [
+                'job_id' => $job->job_id,
+                'status' => $job->status,
+            ])
+            ->values();
+
+        $vehicles = collect();
+        $vehicleIds = $validated['vehicle_ids'] ?? [];
+        if ($user->hasPermission('vehicles.view') && $vehicleIds !== []) {
+            $vehicleColumns = ['id', 'fire_station_id', 'status'];
+            if (Schema::hasColumn('vehicles', 'operational_status')) {
+                $vehicleColumns[] = 'operational_status';
+            }
+
+            $vehicleQuery = Vehicle::query()
+                ->whereKey($vehicleIds)
+                ->with([
+                    'assignments' => fn (HasMany $assignments) => $assignments
+                        ->whereNull('released_at')
+                        ->orderByRaw('CASE WHEN status = ? THEN 1 ELSE 0 END', [JobAssignment::STATUS_QUEUED])
+                        ->latest('assigned_at'),
+                ]);
+            if (! $this->canViewAllStations($user)) {
+                $vehicleQuery->whereIn('fire_station_id', $this->stationIds($user));
+            }
+
+            $vehicles = $vehicleQuery->get($vehicleColumns)
+                ->map(function (Vehicle $vehicle): array {
+                    $status = VehicleDisplayStatus::describe($vehicle, $vehicle->assignments->first());
+
+                    return [
+                        'id' => $vehicle->id,
+                        'label' => $status['label'],
+                        'class' => $status['class'],
+                    ];
+                })
+                ->values();
+        }
+
+        return response()->json([
+            'data' => [
+                'incidents' => $incidents,
+                'vehicles' => $vehicles,
+            ],
+        ]);
+    }
+
     public function dashboardHelpRequests(Request $request): JsonResponse
     {
         return response()->json([
@@ -420,6 +481,7 @@ class PageController extends Controller
                 $action = $alert['action'] ?? 'need_help';
 
                 return [
+                    'id' => $notification->id,
                     'action' => $action,
                     'title' => $action === 'escalated'
                         ? 'Driver escalation'
@@ -434,11 +496,57 @@ class PageController extends Controller
                     'incident_url' => ! empty($alert['incident_id'])
                         ? route('app.jobs.show', $alert['incident_id'])
                         : null,
+                    'dismiss_url' => route('dashboard.help-requests.dismiss', $notification->id),
                     'requested_at' => $alert['requested_at'] ?? $notification->created_at?->toIso8601String(),
                     'created_at' => $notification->created_at?->toIso8601String(),
                 ];
             })->values(),
         ]);
+    }
+
+    public function dismissDriverAlert(Request $request, string $notificationId): JsonResponse|RedirectResponse
+    {
+        $notification = $request->user()->notifications()
+            ->whereKey($notificationId)
+            ->where('type', DriverAssignmentActionAlert::class)
+            ->firstOrFail();
+
+        abort_unless(in_array($notification->data['action'] ?? null, ['need_help', 'escalated'], true), 404);
+
+        $notification->markAsRead();
+
+        if ($request->expectsJson()) {
+            return response()->json(['dismissed' => true]);
+        }
+
+        return back()->with('status', 'Driver alert dismissed.');
+    }
+
+    public function dismissAllDriverAlerts(Request $request): JsonResponse|RedirectResponse
+    {
+        $user = $request->user();
+        $notificationIds = $user->notifications()
+            ->where('type', DriverAssignmentActionAlert::class)
+            ->whereNull('read_at')
+            ->get()
+            ->filter(fn ($notification): bool => in_array(
+                $notification->data['action'] ?? null,
+                ['need_help', 'escalated'],
+                true,
+            ))
+            ->pluck('id');
+
+        if ($notificationIds->isNotEmpty()) {
+            $user->notifications()
+                ->whereKey($notificationIds)
+                ->update(['read_at' => now()]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['dismissed' => $notificationIds->count()]);
+        }
+
+        return back()->with('status', 'Driver alerts dismissed.');
     }
 
     public function catalog(Request $request, string $kind)
@@ -761,6 +869,7 @@ class PageController extends Controller
     {
         return $user->notifications()
             ->where('type', DriverAssignmentActionAlert::class)
+            ->whereNull('read_at')
             ->latest()
             ->limit(50)
             ->get()

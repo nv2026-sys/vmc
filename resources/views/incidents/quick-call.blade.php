@@ -75,6 +75,7 @@
                 <label class="field-wide">Incident address / location
                     <textarea name="incident_address" required maxlength="2000" rows="2" autocomplete="street-address">{{ old('incident_address') }}</textarea>
                 </label>
+                @include('incidents.partials.location-picker')
                 <label class="field-wide">Short remarks <span class="muted">(optional)</span>
                     <textarea name="remarks" maxlength="500" rows="2">{{ old('remarks') }}</textarea>
                 </label>

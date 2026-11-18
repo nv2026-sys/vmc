@@ -54,9 +54,14 @@ class QuickCallRegistrationTest extends TestCase
             ->assertOk()
             ->assertSee('Quick call')
             ->assertSee('Caller name')
-            ->assertDontSee('Latitude');
+            ->assertSee('Incident / pickup location')
+            ->assertSee('Latitude')
+            ->assertSee('Longitude');
 
-        $response = $this->post('/jobs/quick-call', $this->quickCallData($ward));
+        $response = $this->post('/jobs/quick-call', $this->quickCallData($ward, [
+            'latitude' => 22.3072,
+            'longitude' => 73.1812,
+        ]));
         $job = EmergencyJob::query()->sole();
 
         $response->assertRedirect(route('app.jobs.quick-call.confirmation', $job));
@@ -67,6 +72,8 @@ class QuickCallRegistrationTest extends TestCase
         $this->assertSame('Central area', $job->society_name);
         $this->assertSame('45 Main Road', $job->incident_address);
         $this->assertSame('Smoke from a shop', $job->remarks);
+        $this->assertSame('22.3072000', $job->latitude);
+        $this->assertSame('73.1812000', $job->longitude);
         $this->assertDatabaseHas('job_call_logs', [
             'emergency_job_id' => $job->id,
             'caller_phone' => '+91 98765 43210',
@@ -107,6 +114,13 @@ class QuickCallRegistrationTest extends TestCase
             ->post('/jobs/quick-call', $this->quickCallData($otherWard))
             ->assertRedirect('/jobs/quick-call')
             ->assertSessionHasErrors('ward_id');
+
+        $this->from('/jobs/quick-call')
+            ->post('/jobs/quick-call', $this->quickCallData($ward, [
+                'latitude' => 22.3072,
+            ]))
+            ->assertRedirect('/jobs/quick-call')
+            ->assertSessionHasErrors('longitude');
 
         $this->assertDatabaseCount('emergency_jobs', 0);
     }

@@ -21,6 +21,8 @@ class QuickCallRequest extends FormRequest
             'ward_id' => ['required', 'integer', 'exists:wards,id'],
             'society_name' => ['required', 'string', 'max:255'],
             'incident_address' => ['required', 'string', 'max:2000'],
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
             'remarks' => ['nullable', 'string', 'max:500'],
         ];
     }
