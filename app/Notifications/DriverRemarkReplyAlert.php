@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Channels\FcmPushChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
@@ -19,7 +20,7 @@ class DriverRemarkReplyAlert extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', FcmPushChannel::class];
     }
 
     /**

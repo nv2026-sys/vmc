@@ -36,6 +36,24 @@ class DriverAssignmentWorkflow
             ->get();
     }
 
+    /**
+     * @return Collection<int, JobAssignment>
+     */
+    public function allAssignments(User $driver, ?int $wardId = null): Collection
+    {
+        $this->ensureDriver($driver);
+
+        $assignments = $this->assignmentsFor($driver);
+        if ($wardId !== null) {
+            $assignments->whereHas('emergencyJob', fn (Builder $jobs) => $jobs->where('ward_id', $wardId));
+        }
+
+        return $assignments
+            ->orderByDesc('assigned_at')
+            ->orderByDesc('id')
+            ->get();
+    }
+
     public function findActiveAssignment(User $driver, string $identifier): JobAssignment
     {
         $this->ensureDriver($driver);

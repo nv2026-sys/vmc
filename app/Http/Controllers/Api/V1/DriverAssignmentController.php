@@ -30,6 +30,23 @@ class DriverAssignmentController extends Controller
         ]);
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'ward_id' => ['nullable', 'integer', 'exists:wards,id'],
+        ]);
+        $assignments = $this->workflow->allAssignments(
+            $request->user(),
+            isset($filters['ward_id']) ? (int) $filters['ward_id'] : null,
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'All driver assignments retrieved successfully',
+            'assignments' => DriverAssignmentResource::collection($assignments)->resolve($request),
+        ]);
+    }
+
     public function attend(Request $request, string $assignment): JsonResponse
     {
         $data = $request->validate([

@@ -92,6 +92,11 @@ class User extends Authenticatable
         return $this->hasMany(JobAssignment::class, 'assigned_by');
     }
 
+    public function devices(): HasMany
+    {
+        return $this->hasMany(UserDevice::class);
+    }
+
     public function hasRole(string $code): bool
     {
         if ($this->relationLoaded('roles')) {

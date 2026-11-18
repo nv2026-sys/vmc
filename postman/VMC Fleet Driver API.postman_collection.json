@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "aa43e6f4-4d61-4d9d-b420-24fc0478ed95",
     "name": "VMC Fleet Driver API",
-    "description": "Mobile API requests for VMC vehicle drivers. Set base_url to the running Laravel API (for example http://127.0.0.1:8000), set driver_email and driver_password, then run Login first. The login request stores the Sanctum token for the other requests. Each vehicle assignment has one explicit driver; fleet APIs and GPS/status updates are limited to that assigned driver.",
+    "description": "Mobile API requests for VMC vehicle drivers. Set base_url to the running Laravel API (for example http://127.0.0.1:8000), set driver_email and driver_password, then run Login first. The login request stores the Sanctum token for the other requests. Includes all-driver-assignments and ward filtering, GPS updates, and FCM token registration.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -59,6 +59,31 @@
     {
       "key": "device_longitude",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_speed_kph",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_recorded_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "ward_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "fcm_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_type",
+      "value": "android",
       "type": "string"
     },
     {
@@ -489,6 +514,73 @@
           "response": []
         },
         {
+          "name": "List All My Assignments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('All assignments request succeeds', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const records = pm.response.json().assignments || [];",
+                  "    if (records.length > 0) {",
+                  "        pm.collectionVariables.set('assignment_id', records[0].assignmentId);",
+                  "        if (records[0].wardId) pm.collectionVariables.set('ward_id', records[0].wardId);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/driver/assignments/all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "driver", "assignments", "all"]
+            },
+            "description": "Returns all assignments for the authenticated driver, including queued, active, completed, and declined. Each record includes assignmentId, driver assignment status in status, aggregated incident status in incidentStatus, and wardId, wardName, and wardCode."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter My Assignments by Ward",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Ward-filtered assignments request succeeds', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Accept", "value": "application/json"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/driver/assignments/all?ward_id={{ward_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "driver", "assignments", "all"],
+              "query": [
+                {
+                  "key": "ward_id",
+                  "value": "{{ward_id}}"
+                }
+              ]
+            },
+            "description": "Filters the authenticated driver's assignments to the selected ward_id. Run List All My Assignments first to populate ward_id from an assignment, or set it manually."
+          },
+          "response": []
+        },
+        {
           "name": "Attend / Start Assignment",
           "request": {
             "method": "POST",
@@ -702,6 +794,43 @@
       ]
     },
     {
+      "name": "Push Notifications",
+      "item": [
+        {
+          "name": "Register FCM Device Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fcm_token\": \"{{fcm_token}}\",\n  \"device_type\": \"{{device_type}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/save-fcm-token",
+              "host": ["{{base_url}}"],
+              "path": ["api", "save-fcm-token"]
+            },
+            "description": "Authenticated endpoint. Register the Flutter device token after login and whenever Firebase refreshes it. device_type must be android or ios. Never store a Firebase service-account key in this collection."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Assignment Status and GPS",
       "item": [
         {
@@ -782,7 +911,7 @@
                 "gps"
               ]
             },
-            "description": "The mobile app should send this authenticated POST every 10 seconds while location tracking is active. Set device_latitude, device_longitude, optional device_speed_kph, and device_recorded_at from the current device GPS fix (recorded_at should be ISO 8601). Every accepted request appends a vehicle_gps_logs record and updates the vehicle's latest coordinates. The API rejects points older than the latest saved point, requires On Road status, and is rate-limited to 120 requests per minute."
+            "description": "The mobile app should send this authenticated POST every 15 seconds while location tracking is active. Set device_latitude, device_longitude, optional device_speed_kph, and device_recorded_at from the current device GPS fix (recorded_at should be ISO 8601). Every accepted request appends a vehicle_gps_logs record and updates the vehicle's latest coordinates. The API rejects points older than the latest saved point, requires On Road status, and is rate-limited to 120 requests per minute."
           },
           "response": []
         },

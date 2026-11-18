@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\CatalogMutationController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DriverAssignmentController;
 use App\Http\Controllers\Api\V1\FleetController;
 use App\Http\Controllers\Api\V1\IncidentArchiveController;
@@ -29,6 +30,7 @@ Route::prefix('v1')->group(function (): void {
             ->whereUuid('notificationId');
 
         Route::prefix('driver/assignments')->controller(DriverAssignmentController::class)->group(function (): void {
+            Route::get('/all', 'all');
             Route::get('/active', 'active');
             Route::post('/{assignment}/attend', 'attend');
             Route::post('/{assignment}/decline', 'decline');
@@ -120,3 +122,6 @@ Route::prefix('v1')->group(function (): void {
         }
     });
 });
+
+Route::post('/save-fcm-token', [DeviceTokenController::class, 'store'])
+    ->middleware(['auth:sanctum', 'active']);
