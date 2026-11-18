@@ -43,20 +43,20 @@ class WebAuthController extends Controller
             ]);
         }
 
-        $request->session()->regenerate();
-
         DB::transaction(function () use ($user, $auditLogger, $driverSessions, $request): void {
             $user = User::query()->lockForUpdate()->findOrFail($user->id);
-            if ($user->hasRole('VEHICLE_DRIVER')) {
-                $driverSessions->assertAvailable($user);
-                $driverSessions->claimWeb($user, $request->session()->getId());
+            $isDriver = $user->hasRole('VEHICLE_DRIVER');
+            if ($isDriver) {
+                $driverSessions->replaceExistingSessions($user);
             }
 
             $user->forceFill(['last_login_at' => now()])->save();
             $auditLogger->record($user, 'auth.login', $user, ['method' => 'web']);
+            Auth::guard('web')->login($user);
+            if ($isDriver) {
+                $request->session()->put('driver_login_session', $driverSessions->claimWeb($user));
+            }
         });
-
-        Auth::guard('web')->login($user);
 
         return redirect()->intended(route('dashboard'));
     }

@@ -14,6 +14,7 @@ use App\Models\Ward;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AuthApiTest extends TestCase
@@ -166,7 +167,7 @@ class AuthApiTest extends TestCase
         $this->assertSame(1, VehicleGpsLog::query()->where('vehicle_id', $vehicle->id)->count());
     }
 
-    public function test_driver_cannot_login_on_another_device_until_the_active_device_logs_out(): void
+    public function test_driver_login_replaces_the_previous_api_device_session(): void
     {
         $driver = User::factory()->create([
             'email' => 'single-session-driver@example.com',
@@ -181,28 +182,13 @@ class AuthApiTest extends TestCase
         ])->assertOk();
         $firstToken = $firstLogin->json('data.token');
 
-        $this->postJson('/api/v1/auth/login', [
-            'email' => $driver->email,
-            'password' => 'a-strong-test-password',
-            'device_name' => 'second-device',
-        ])->assertUnprocessable()
-            ->assertJsonValidationErrors('email')
-            ->assertJsonPath('errors.email.0', 'This driver account is already logged in on another device. Log out there before signing in here.');
-        $this->assertDatabaseCount('personal_access_tokens', 1);
-
-        Auth::forgetGuards();
-        $this->withToken($firstToken)->getJson('/api/v1/auth/me')->assertOk();
-
-        $this->withToken($firstToken)->postJson('/api/v1/auth/logout')->assertNoContent();
-        $this->assertDatabaseCount('personal_access_tokens', 0);
-        Auth::forgetGuards();
-
         $secondLogin = $this->postJson('/api/v1/auth/login', [
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
             'device_name' => 'second-device',
         ])->assertOk();
         $secondToken = $secondLogin->json('data.token');
+        $this->assertDatabaseCount('personal_access_tokens', 1);
 
         Auth::forgetGuards();
         $this->withToken($firstToken)->getJson('/api/v1/auth/me')->assertUnauthorized();
@@ -227,23 +213,23 @@ class AuthApiTest extends TestCase
         $this->post('/login', [
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
-        ])->assertSessionHasErrors('email');
-
-        $this->withToken($apiToken)->postJson('/api/v1/auth/logout')->assertNoContent();
+        ])->assertRedirect(route('dashboard'));
         Auth::forgetGuards();
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertDatabaseHas('driver_login_sessions', ['user_id' => $driver->id]);
 
-        $this->post('/login', [
+        $newApiToken = $this->postJson('/api/v1/auth/login', [
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
-        ])->assertRedirect(route('dashboard'));
+        ])->assertOk()->json('data.token');
         $this->assertDatabaseHas('driver_login_sessions', ['user_id' => $driver->id]);
 
         Auth::forgetGuards();
-        $this->withSession([])->postJson('/api/v1/auth/login', [
-            'email' => $driver->email,
-            'password' => 'a-strong-test-password',
-        ])->assertUnprocessable()
-            ->assertJsonPath('errors.email.0', 'This driver account is already logged in on another device. Log out there before signing in here.');
+        $this->get('/dashboard')->assertRedirect(route('login'));
+        Auth::forgetGuards();
+        $this->withToken($newApiToken)->getJson('/api/v1/auth/me')->assertOk();
+        $this->withToken($newApiToken)->postJson('/api/v1/auth/logout')->assertNoContent();
+        $this->assertDatabaseMissing('driver_login_sessions', ['user_id' => $driver->id]);
     }
 
     public function test_driver_web_login_lock_works_with_non_database_sessions_and_refreshes_activity(): void
@@ -259,7 +245,12 @@ class AuthApiTest extends TestCase
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
         ])->assertRedirect(route('dashboard'));
+        $this->assertSame(
+            DB::table('driver_login_sessions')->where('user_id', $driver->id)->value('session_id'),
+            $this->app['session']->driver()->get('driver_login_session'),
+        );
 
+        Auth::forgetGuards();
         $this->travel(90)->minutes();
         $this->get('/login')->assertRedirect(route('dashboard'));
         $this->assertDatabaseHas('driver_login_sessions', [
@@ -271,11 +262,8 @@ class AuthApiTest extends TestCase
         $this->postJson('/api/v1/auth/login', [
             'email' => $driver->email,
             'password' => 'a-strong-test-password',
-        ])->assertUnprocessable()
-            ->assertJsonPath(
-                'errors.email.0',
-                'This driver account is already logged in on another device. Log out there before signing in here.',
-            );
+        ])->assertOk();
+        $this->assertDatabaseHas('driver_login_sessions', ['user_id' => $driver->id]);
     }
 
     public function test_driver_web_logout_releases_the_single_device_lock(): void
@@ -291,6 +279,7 @@ class AuthApiTest extends TestCase
             'password' => 'a-strong-test-password',
         ])->assertRedirect(route('dashboard'));
 
+        Auth::forgetGuards();
         $this->post('/logout')->assertRedirect(route('dashboard'));
 
         $this->postJson('/api/v1/auth/login', [

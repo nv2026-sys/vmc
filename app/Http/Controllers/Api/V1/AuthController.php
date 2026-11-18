@@ -62,11 +62,14 @@ class AuthController extends Controller
             }
 
             if ($user->hasRole('VEHICLE_DRIVER')) {
-                $driverSessions->assertAvailable($user);
+                $driverSessions->replaceExistingSessions($user);
             }
 
             $user->forceFill(['last_login_at' => now()])->save();
             $newToken = $user->createToken($credentials['device_name'] ?? 'emergency-dispatch-client');
+            if ($user->hasRole('VEHICLE_DRIVER')) {
+                $driverSessions->claimApi($user);
+            }
             $auditLogger->record($user, 'auth.login', $user);
 
             if (isset($gpsData['latitude'], $gpsData['longitude'])) {
@@ -142,11 +145,14 @@ class AuthController extends Controller
         $user = $request->user();
         $token = $user->currentAccessToken();
 
-        DB::transaction(function () use ($user, $token, $auditLogger, $statusWorkflow): void {
+        DB::transaction(function () use ($user, $token, $auditLogger, $driverSessions, $statusWorkflow): void {
             $statusWorkflow->markLinkedVehicleOffRoadOnLogout($user);
 
             if ($token instanceof PersonalAccessToken) {
                 $token->delete();
+            }
+            if ($user->hasRole('VEHICLE_DRIVER')) {
+                $driverSessions->releaseWeb($user);
             }
 
             $auditLogger->record($user, 'auth.logout', $user);
