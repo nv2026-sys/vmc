@@ -138,7 +138,7 @@ class DriverAssignmentApiTest extends TestCase
         $this->assertDatabaseCount('job_assignment_actions', 5);
     }
 
-    public function test_driver_all_assignments_includes_history_and_is_scoped_to_the_authenticated_driver(): void
+    public function test_driver_all_assignments_excludes_completed_work_and_is_scoped_to_the_driver(): void
     {
         [$driver, , $activeJob, , $activeAssignment] = $this->assignmentFixture('DRIVER-ALL-ACTIVE');
         [, , , , $otherAssignment] = $this->assignmentFixture('DRIVER-ALL-OTHER');
@@ -147,20 +147,23 @@ class DriverAssignmentApiTest extends TestCase
         $historicalAssignment->status = JobAssignment::STATUS_COMPLETED;
         $historicalAssignment->released_at = now();
         $historicalAssignment->save();
+        $workDoneAssignment = $otherAssignment->replicate();
+        $workDoneAssignment->assigned_driver_user_id = $driver->id;
+        $workDoneAssignment->status = JobAssignment::STATUS_WORK_DONE;
+        $workDoneAssignment->released_at = now();
+        $workDoneAssignment->save();
 
         $this->actingAs($driver, 'sanctum')
             ->getJson('/api/v1/driver/assignments/all')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonCount(2, 'assignments')
+            ->assertJsonCount(1, 'assignments')
             ->assertJsonFragment([
                 'assignmentId' => $activeAssignment->id,
                 'status' => JobAssignment::STATUS_ASSIGNED,
             ])
-            ->assertJsonFragment([
-                'assignmentId' => $historicalAssignment->id,
-                'status' => JobAssignment::STATUS_COMPLETED,
-            ])
+            ->assertJsonMissing(['assignmentId' => $historicalAssignment->id])
+            ->assertJsonMissing(['assignmentId' => $workDoneAssignment->id])
             ->assertJsonMissing([
                 'assignmentId' => $otherAssignment->id,
             ]);
@@ -175,9 +178,7 @@ class DriverAssignmentApiTest extends TestCase
         $otherWardId = $otherAssignment->emergencyJob->ward_id;
         $this->getJson('/api/v1/driver/assignments/all?ward_id='.$otherWardId)
             ->assertOk()
-            ->assertJsonCount(1, 'assignments')
-            ->assertJsonPath('assignments.0.assignmentId', $historicalAssignment->id)
-            ->assertJsonPath('assignments.0.wardId', $otherWardId);
+            ->assertJsonCount(0, 'assignments');
 
         $this->getJson('/api/v1/driver/assignments/all?ward_id=not-a-ward')
             ->assertUnprocessable()

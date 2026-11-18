@@ -49,6 +49,10 @@ class DriverAssignmentWorkflow
         }
 
         return $assignments
+            ->whereNotIn('status', [
+                JobAssignment::STATUS_COMPLETED,
+                JobAssignment::STATUS_WORK_DONE,
+            ])
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->get();
