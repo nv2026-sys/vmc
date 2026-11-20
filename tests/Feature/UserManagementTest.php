@@ -37,8 +37,22 @@ class UserManagementTest extends TestCase
             ->assertOk()
             ->assertSee('page-heading-actions', false)
             ->assertSee('+ Add user')
+            ->assertSee('user-hierarchy-heading', false)
             ->assertSee($staff->name)
             ->assertSee(route('users.edit', $staff));
+    }
+
+    public function test_authenticated_user_without_user_management_permission_can_open_own_profile(): void
+    {
+        $driver = User::factory()->create();
+        $driver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+
+        $this->actingAs($driver)
+            ->get(route('profile'))
+            ->assertOk()
+            ->assertSee($driver->name)
+            ->assertSee('User menu for '.$driver->name)
+            ->assertDontSee('Edit account');
     }
 
     public function test_user_directory_keeps_query_count_bounded_as_accounts_grow(): void

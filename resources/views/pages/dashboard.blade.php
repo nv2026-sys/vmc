@@ -101,6 +101,13 @@
             <a class="ops-incidents-view-all" href="{{ route('app.jobs') }}">View all incidents <span aria-hidden="true">→</span></a>
         </div>
         <div class="ops-incidents-toolbar">
+            <div class="ops-priority-legend" aria-label="Priority color legend">
+                <span><i class="is-critical"></i>Critical</span>
+                <span><i class="is-high"></i>High</span>
+                <span><i class="is-medium"></i>Medium</span>
+                <span><i class="is-normal"></i>Normal</span>
+                <span><i class="is-low"></i>Low</span>
+            </div>
             <div class="ops-incidents-toolbar-tools">
                 @if ($canViewIncidentMap)
                     <div class="ops-view-toggle" role="group" aria-label="Recent incidents view">
@@ -387,6 +394,7 @@
         refreshing = true;
         try {
             const response = await fetch(`${panel.dataset.statusEndpoint}?${parameters.toString()}`, {
+                cache: 'no-store',
                 headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             });
             if (!response.ok) {

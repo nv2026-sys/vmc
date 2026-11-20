@@ -16,6 +16,15 @@ class RoleManagementController extends Controller
     public function create(): View
     {
         return view('roles.create', [
+            'role' => null,
+            'permissions' => Permission::query()->orderBy('name')->get(),
+        ]);
+    }
+
+    public function edit(Role $role): View
+    {
+        return view('roles.create', [
+            'role' => $role->load('permissions'),
             'permissions' => Permission::query()->orderBy('name')->get(),
         ]);
     }
@@ -47,5 +56,30 @@ class RoleManagementController extends Controller
         });
 
         return redirect()->route('app.roles')->with('status', $role->name.' role created.');
+    }
+
+    public function update(Request $request, Role $role, AuditLogger $auditLogger): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['required', 'integer', 'distinct', Rule::exists('permissions', 'id')],
+        ]);
+
+        DB::transaction(function () use ($validated, $request, $role, $auditLogger): void {
+            $role->update([
+                'name' => trim($validated['name']),
+                'description' => $validated['description'] ?? null,
+            ]);
+            $role->permissions()->sync($validated['permissions'] ?? []);
+
+            $auditLogger->record($request->user(), 'roles.updated', $role, [
+                'permission_ids' => $validated['permissions'] ?? [],
+                'is_system' => $role->is_system,
+            ]);
+        });
+
+        return redirect()->route('app.roles')->with('status', $role->name.' role updated.');
     }
 }

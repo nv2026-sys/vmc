@@ -28,27 +28,28 @@
             <table class="user-table">
                 <thead><tr><th>User</th><th>Hierarchy role</th><th>Assigned stations</th><th>Status</th><th>Last sign in</th><th></th></tr></thead>
                 <tbody>
-                @forelse ($users as $directoryUser)
-                    @php
-                        $assignedStations = $directoryUser->fireStations->merge($directoryUser->managedFireStations)->unique('id');
-                    @endphp
-                    <tr>
-                        <td><a class="user-name-link" href="{{ route('users.show', $directoryUser) }}"><strong>{{ $directoryUser->name }}</strong><small>{{ $directoryUser->email }}</small></a></td>
-                        <td><div class="role-badges">@forelse ($directoryUser->roles as $role)<span class="role-badge">{{ str_replace('_', ' ', $role->name) }}</span>@empty<span class="muted">No role assigned</span>@endforelse</div></td>
-                        <td>
-                            <div class="station-badges">
-                                @forelse ($assignedStations as $station)<span class="station-badge">{{ $station->code }}</span>@empty<span class="muted">No station assigned</span>@endforelse
-                            </div>
-                        </td>
-                        <td><span class="status {{ $directoryUser->is_active ? 'status-active' : 'status-inactive' }}">{{ $directoryUser->is_active ? 'Active' : 'Inactive' }}</span></td>
-                        <td>{{ $directoryUser->last_login_at?->format('M j, Y g:i A') ?? 'Never' }}</td>
-                        <td class="user-actions">
-                            <a class="text-link" href="{{ route('users.show', $directoryUser) }}">Details</a>
-                            @if (in_array($directoryUser->id, $manageableUserIds, true))
-                                <a class="text-link" href="{{ route('users.edit', $directoryUser) }}">Edit</a>
-                            @endif
-                        </td>
-                    </tr>
+                @forelse ($usersByHierarchy as $hierarchyName => $hierarchyUsers)
+                    <tr class="user-hierarchy-heading"><th colspan="6"><span>{{ $hierarchyName }}</span><small>{{ $hierarchyUsers->count() }} account{{ $hierarchyUsers->count() === 1 ? '' : 's' }} on this page</small></th></tr>
+                    @foreach ($hierarchyUsers as $directoryUser)
+                        @php($assignedStations = $directoryUser->fireStations->merge($directoryUser->managedFireStations)->unique('id'))
+                        <tr>
+                            <td><a class="user-name-link" href="{{ route('users.show', $directoryUser) }}"><strong>{{ $directoryUser->name }}</strong><small>{{ $directoryUser->email }}</small></a></td>
+                            <td><div class="role-badges">@forelse ($directoryUser->roles as $role)<span class="role-badge">{{ str_replace('_', ' ', $role->name) }}</span>@empty<span class="muted">No role assigned</span>@endforelse</div></td>
+                            <td>
+                                <div class="station-badges">
+                                    @forelse ($assignedStations as $station)<span class="station-badge">{{ $station->code }}</span>@empty<span class="muted">No station assigned</span>@endforelse
+                                </div>
+                            </td>
+                            <td><span class="status {{ $directoryUser->is_active ? 'status-active' : 'status-inactive' }}">{{ $directoryUser->is_active ? 'Active' : 'Inactive' }}</span></td>
+                            <td>{{ $directoryUser->last_login_at?->format('M j, Y g:i A') ?? 'Never' }}</td>
+                            <td class="user-actions">
+                                <a class="text-link" href="{{ route('users.show', $directoryUser) }}">Details</a>
+                                @if (in_array($directoryUser->id, $manageableUserIds, true))
+                                    <a class="text-link" href="{{ route('users.edit', $directoryUser) }}">Edit</a>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
                 @empty
                     <tr><td colspan="6" class="empty-cell">No users match your search in the permitted station scope.</td></tr>
                 @endforelse

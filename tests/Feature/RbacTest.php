@@ -178,4 +178,41 @@ class RbacTest extends TestCase
 
         $this->assertDatabaseMissing('roles', ['code' => 'UNAUTHORIZED_ROLE']);
     }
+
+    public function test_super_admin_can_edit_system_role_permissions_without_changing_role_code(): void
+    {
+        $superAdmin = User::factory()->create();
+        $superAdmin->roles()->attach(Role::query()->where('code', 'SUPER_ADMIN')->value('id'));
+        $role = Role::query()->where('code', 'DISPATCH_OPERATOR')->firstOrFail();
+        $permission = Permission::query()->where('code', 'reports.view')->firstOrFail();
+
+        $this->actingAs($superAdmin)
+            ->get('/roles')
+            ->assertOk()
+            ->assertSee(route('app.roles.edit', $role));
+
+        $this->get(route('app.roles.edit', $role))
+            ->assertOk()
+            ->assertSee('Edit role')
+            ->assertSee('DISPATCH_OPERATOR')
+            ->assertSee('System role');
+
+        $this->put(route('app.roles.update', $role), [
+            'name' => 'Updated Dispatch Operator',
+            'description' => 'Updated role details.',
+            'permissions' => [$permission->id],
+        ])
+            ->assertRedirect(route('app.roles'))
+            ->assertSessionHas('status', 'Updated Dispatch Operator role updated.');
+
+        $role->refresh();
+        $this->assertSame('DISPATCH_OPERATOR', $role->code);
+        $this->assertTrue($role->is_system);
+        $this->assertSame('Updated Dispatch Operator', $role->name);
+        $this->assertTrue($role->permissions->contains('code', 'reports.view'));
+        $this->assertDatabaseHas('audit_logs', [
+            'event' => 'roles.updated',
+            'subject_id' => (string) $role->id,
+        ]);
+    }
 }

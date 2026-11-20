@@ -25,6 +25,7 @@ Route::post('/logout', [WebAuthController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 Route::middleware('auth')->group(function (): void {
+    Route::get('/profile', [UserManagementController::class, 'profile'])->name('profile');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/latest', [NotificationController::class, 'latest'])->name('notifications.latest');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
@@ -97,6 +98,8 @@ Route::get('/users/{managedUser}', [UserManagementController::class, 'show'])
 Route::middleware(['auth', 'permission:roles.manage'])->group(function (): void {
     Route::get('/roles/create', [RoleManagementController::class, 'create'])->name('app.roles.create');
     Route::post('/roles', [RoleManagementController::class, 'store'])->name('app.roles.store');
+    Route::get('/roles/{role}/edit', [RoleManagementController::class, 'edit'])->name('app.roles.edit');
+    Route::put('/roles/{role}', [RoleManagementController::class, 'update'])->name('app.roles.update');
 });
 
 Route::middleware(['auth', 'permission:jobs.create'])->group(function (): void {

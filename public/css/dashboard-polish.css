@@ -234,6 +234,157 @@
     font-size: 11px;
 }
 
+.operations-dashboard-page .account-menu {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.operations-dashboard-page .account-menu-trigger {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    list-style: none;
+    border: 1px solid #5078a6;
+    border-radius: 50%;
+    color: #e6f2ff;
+    background: #1b426c;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease;
+}
+
+.operations-dashboard-page .account-menu-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.operations-dashboard-page .account-menu-trigger:hover,
+.operations-dashboard-page .account-menu[open] .account-menu-trigger {
+    border-color: #83baff;
+    background: #25578b;
+}
+
+.operations-dashboard-page .account-menu-trigger svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+.operations-dashboard-page .account-menu-dropdown {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(280px, calc(100vw - 24px));
+    padding: 8px;
+    border: 1px solid rgb(164 195 232 / 20%);
+    border-radius: 11px;
+    color: #eaf2ff;
+    background: linear-gradient(155deg, #102d53, #0b2241);
+    box-shadow: 0 16px 38px rgb(1 10 24 / 42%);
+}
+
+.operations-dashboard-page .account-menu-identity {
+    display: grid;
+    gap: 4px;
+    padding: 10px 11px 12px;
+    border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.operations-dashboard-page .account-menu-identity strong {
+    color: #f3f7ff;
+    font-size: 13px;
+}
+
+.operations-dashboard-page .account-menu-identity small {
+    overflow-wrap: anywhere;
+    color: #a9bfd8;
+    font-size: 11px;
+}
+
+.operations-dashboard-page .account-menu-dropdown > a,
+.operations-dashboard-page .account-menu-dropdown form button {
+    display: flex;
+    width: 100%;
+    min-height: 38px;
+    align-items: center;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 7px;
+    color: #dceaff;
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.operations-dashboard-page .account-menu-dropdown > a {
+    margin-top: 5px;
+}
+
+.operations-dashboard-page .account-menu-dropdown > a:hover,
+.operations-dashboard-page .account-menu-dropdown form button:hover {
+    color: #fff;
+    background: rgb(255 255 255 / 9%);
+}
+
+.operations-dashboard-page .account-menu-dropdown form {
+    margin: 0;
+    padding-top: 4px;
+    border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
+.operations-dashboard-page .account-menu-dropdown form button {
+    color: #ffc2c6;
+}
+
+.operations-dashboard-page .footer {
+    flex-wrap: wrap;
+    gap: 8px 18px;
+}
+
+.operations-dashboard-page .footer-credit {
+    margin-left: auto;
+}
+
+.operations-dashboard-page .footer-credit strong {
+    color: #c1d2e8;
+    font-weight: 700;
+}
+
+.user-table .user-hierarchy-heading th {
+    padding: 11px 12px;
+    border-top: 1px solid rgb(164 195 232 / 14%);
+    color: #e9f2ff;
+    background: linear-gradient(90deg, #173b63, #102a49);
+    font-size: 12px;
+    text-transform: none;
+}
+
+.user-table .user-hierarchy-heading th span {
+    color: #edf4ff;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.user-table .user-hierarchy-heading th small {
+    margin-left: 9px;
+    color: #a8bfdc;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: none;
+}
+
+.operations-dashboard-page .field input[readonly] {
+    color: #8fa9c8;
+    background: #edf2f8;
+    cursor: not-allowed;
+}
+
 .operations-dashboard-layout .topbar .button {
     min-height: 34px;
     padding: 0 12px;
@@ -919,12 +1070,45 @@
     flex-wrap: wrap;
     min-height: 36px;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 8px;
     padding: 3px 13px;
     border-bottom: 1px solid rgb(164 195 232 / 13%);
     background: rgb(5 22 42 / 36%);
 }
+
+.operations-dashboard-layout .ops-priority-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 12px;
+    color: #d3e2f5;
+    font-size: 9px;
+    font-weight: 650;
+}
+
+.operations-dashboard-layout .ops-priority-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.operations-dashboard-layout .ops-priority-legend i {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+}
+
+.operations-dashboard-layout .ops-priority-legend i.is-critical { color: #f04452; }
+.operations-dashboard-layout .ops-priority-legend i.is-high { color: #f58b20; }
+.operations-dashboard-layout .ops-priority-legend i.is-medium { color: #ffe07a; }
+.operations-dashboard-layout .ops-priority-legend i.is-normal { color: #2589f5; }
+.operations-dashboard-layout .ops-priority-legend i.is-low { color: #1cba72; }
 
 .operations-dashboard-layout .ops-incidents-toolbar-tools {
     display: flex;
@@ -1258,33 +1442,48 @@
     display: inline-flex;
     min-width: 58px;
     justify-content: center;
-    padding: 4px 8px;
-    border: 1px solid #208eff;
+    padding: 5px 9px;
+    border: 1px solid #4e9fff;
     border-radius: 999px;
     color: #fff;
-    background: #0876db;
-    font-size: 9px;
-    font-weight: 650;
+    background: linear-gradient(180deg, #2589f5, #0756b8);
+    box-shadow: 0 2px 8px rgb(3 23 48 / 25%);
+    font-size: 10px;
+    font-weight: 800;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.operations-dashboard-layout .ops-incident-priority.is-high,
 .operations-dashboard-layout .ops-incident-priority.is-critical {
-    border-color: #ff4d61;
+    border-color: #ff7b83;
     color: #fff;
-    background: linear-gradient(180deg, #ff4658, #d80e2b);
+    background: linear-gradient(180deg, #f04452, #a80e26);
+    box-shadow: 0 0 11px rgb(240 68 82 / 35%);
+}
+
+.operations-dashboard-layout .ops-incident-priority.is-high {
+    border-color: #ffb064;
+    color: #fff;
+    background: linear-gradient(180deg, #f58b20, #bd4a08);
+    box-shadow: 0 0 9px rgb(245 139 32 / 28%);
 }
 
 .operations-dashboard-layout .ops-incident-priority.is-medium {
-    border-color: #ffb01f;
+    border-color: #ffe083;
+    color: #2e2508;
+    background: linear-gradient(180deg, #ffe07a, #e5a914);
+}
+
+.operations-dashboard-layout .ops-incident-priority.is-normal {
+    border-color: #4e9fff;
     color: #fff;
-    background: linear-gradient(180deg, #ffb52e, #e87900);
+    background: linear-gradient(180deg, #2589f5, #0756b8);
 }
 
 .operations-dashboard-layout .ops-incident-priority.is-low {
-    border-color: #1ec5f4;
-    color: #fff;
-    background: linear-gradient(180deg, #13b7e9, #0874c9);
+    border-color: #55e3a0;
+    color: #effff6;
+    background: linear-gradient(180deg, #1cba72, #087343);
 }
 
 .operations-dashboard-layout .ops-ward-badge {
@@ -2950,6 +3149,10 @@
 }
 
 @media (max-width: 650px) {
+    .operations-dashboard-page .footer-credit {
+        margin-left: 0;
+    }
+
     .operations-dashboard-page .page-heading {
         flex-direction: row;
         align-items: center;
@@ -2981,7 +3184,9 @@
     }
 
     .operations-dashboard-layout .main-column > .footer {
-        display: none;
+        display: flex;
+        min-height: 36px;
+        padding: 0 20px;
     }
 
     .operations-dashboard-layout .ops-dashboard {

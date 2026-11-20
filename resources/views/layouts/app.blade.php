@@ -159,9 +159,16 @@
                 <span class="ops-live {{ app()->environment('local') ? 'is-demo' : '' }}"><span></span>{{ app()->environment('local') ? 'Demo data' : 'Live' }}</span>
                 <span class="topbar-date">{{ now()->format('D, d M Y H:i') }}</span>
                 @if ($currentUser)
-                    <span class="avatar">{{ collect(explode(' ', $currentUser->name))->take(2)->map(fn ($part) => mb_substr($part, 0, 1))->implode('') }}</span>
-                    <span class="account-name">{{ $currentUser->name }}</span>
-                    <form method="POST" action="{{ route('logout') }}">@csrf<button class="button button-light button-small" type="submit">Sign out</button></form>
+                    <details class="account-menu">
+                        <summary class="account-menu-trigger" title="{{ $currentUser->name }}" aria-label="User menu for {{ $currentUser->name }}">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path></svg>
+                        </summary>
+                        <div class="account-menu-dropdown">
+                            <div class="account-menu-identity"><strong>{{ $currentUser->name }}</strong><small>{{ $currentUser->email }}</small></div>
+                            <a href="{{ route('profile') }}">My profile</a>
+                            <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit">Sign out</button></form>
+                        </div>
+                    </details>
                 @else
                     <span class="preview-tag"><span></span> Preview mode</span>
                     <a class="button button-primary button-small" href="{{ route('login') }}">Sign in</a>
@@ -169,10 +176,24 @@
             </div>
         </header>
         <main class="content">@yield('content')</main>
-        <footer class="footer"><strong>Responda Operations</strong><span>Secure emergency response management</span></footer>
+        <footer class="footer"><strong>Responda Operations</strong><span>Secure emergency response management</span><span class="footer-credit">Developed by <strong>Saltriver</strong></span></footer>
     </div>
 </div>
 @if ($currentUser)
+    <script>
+        (() => {
+            const closeAccountMenus = (event) => {
+                document.querySelectorAll('.account-menu[open]').forEach((menu) => {
+                    if (event.type === 'keydown' && event.key !== 'Escape') return;
+                    if (event.type === 'click' && menu.contains(event.target)) return;
+                    menu.removeAttribute('open');
+                });
+            };
+
+            document.addEventListener('click', closeAccountMenus);
+            document.addEventListener('keydown', closeAccountMenus);
+        })();
+    </script>
     <div class="notification-toast" data-notification-toast role="status" aria-live="polite" hidden>
         <strong data-notification-toast-title></strong>
         <span data-notification-toast-message></span>

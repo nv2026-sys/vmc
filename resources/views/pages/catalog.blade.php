@@ -68,10 +68,10 @@
                             <tr><td><strong><a class="text-link" href="{{ route('app.jobs.show', $job->id) }}">{{ $job->job_id }}</a></strong><small>{{ $job->ward?->code ?? 'Location' }}</small></td><td><strong>{{ $job->society_name ?: ($job->ward?->name ?? 'Area not recorded') }}</strong><small>{{ $job->caller_name }}</small><small>{{ $job->caller_phone }}</small></td><td>{{ str_replace('_', ' ', $job->incident_type) }}<small>{{ $job->incident_address }}</small></td><td><span class="status">{{ str_replace('_', ' ', $job->priority) }}</span></td><td><span class="status">{{ str_replace('_', ' ', $job->status) }}</span></td><td>{{ $job->occurred_at->format('M j, Y g:i A') }}</td></tr>
                         @empty <tr><td colspan="6" class="empty-cell">No incident records match your search.</td></tr>@endforelse</tbody>
                     @else
-                        <thead><tr><th>Role</th><th>Code</th><th>Description</th><th>Permissions</th><th>Type</th></tr></thead>
+                        <thead><tr><th>Role</th><th>Code</th><th>Description</th><th>Permissions</th><th>Type</th>@if ($canManageRoles)<th></th>@endif</tr></thead>
                         <tbody>@forelse ($records as $role)
-                            <tr><td><strong>{{ $role->name }}</strong></td><td><code>{{ $role->code }}</code></td><td>{{ $role->description }}</td><td>{{ $role->permissions->pluck('code')->join(', ') ?: 'No permissions assigned' }}</td><td>{{ $role->is_system ? 'System role' : 'Custom role' }}</td></tr>
-                        @empty <tr><td colspan="5" class="empty-cell">No role records match your search.</td></tr>@endforelse</tbody>
+                            <tr><td><strong>{{ $role->name }}</strong></td><td><code>{{ $role->code }}</code></td><td>{{ $role->description }}</td><td>{{ $role->permissions->pluck('code')->join(', ') ?: 'No permissions assigned' }}</td><td>{{ $role->is_system ? 'System role' : 'Custom role' }}</td>@if ($canManageRoles)<td><a class="text-link" href="{{ route('app.roles.edit', $role) }}">Edit</a></td>@endif</tr>
+                        @empty <tr><td colspan="{{ $canManageRoles ? 6 : 5 }}" class="empty-cell">No role records match your search.</td></tr>@endforelse</tbody>
                     @endif
                 </table>
             </div>

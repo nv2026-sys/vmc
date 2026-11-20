@@ -470,7 +470,7 @@ class PageController extends Controller
                 'incidents' => $incidents,
                 'vehicles' => $vehicles,
             ],
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     public function dashboardHelpRequests(Request $request): JsonResponse

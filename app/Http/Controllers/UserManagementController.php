@@ -55,12 +55,22 @@ class UserManagementController extends Controller
         }
 
         $users = $query->orderBy('name')->paginate(15)->withQueryString();
+        $hierarchyUsers = $users->getCollection()
+            ->sortBy(fn (User $user): string => sprintf(
+                '%02d|%s',
+                $this->userHierarchyLevel($user),
+                mb_strtolower($user->name),
+            ))
+            ->values();
+        $users->setCollection($hierarchyUsers);
+        $usersByHierarchy = $hierarchyUsers->groupBy(fn (User $user): string => $this->userHierarchyName($user));
         $manageableUserIds = $users->getCollection()
             ->filter(fn (User $user) => $this->canManageUser($actor, $user, $actorLevel, $stationIdCollection))
             ->modelKeys();
 
         return view('users.index', [
             'users' => $users,
+            'usersByHierarchy' => $usersByHierarchy,
             'search' => $search,
             'manageableUserIds' => $manageableUserIds,
         ]);
@@ -129,6 +139,26 @@ class UserManagementController extends Controller
                 ->values(),
             'logs' => $logs,
             'canEdit' => $managedUser->id !== $actor->id && $this->canManageUser($actor, $managedUser),
+        ]);
+    }
+
+    public function profile(Request $request): View
+    {
+        $managedUser = $request->user()->load(['roles.permissions', 'fireStations', 'managedFireStations']);
+        $logs = AuditLog::query()
+            ->where('user_id', $managedUser->id)
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get(['event', 'created_at']);
+
+        return view('users.show', [
+            'managedUser' => $managedUser,
+            'stations' => $managedUser->fireStations
+                ->merge($managedUser->managedFireStations)
+                ->unique('id')
+                ->values(),
+            'logs' => $logs,
+            'canEdit' => false,
         ]);
     }
 
@@ -344,6 +374,20 @@ class UserManagementController extends Controller
         return $user->roles()->pluck('code')
             ->map(fn (string $code) => self::ROLE_LEVELS[$code] ?? PHP_INT_MAX)
             ->min() ?? PHP_INT_MAX;
+    }
+
+    private function userHierarchyLevel(User $user): int
+    {
+        return $user->roles
+            ->map(fn (Role $role): int => self::ROLE_LEVELS[$role->code] ?? PHP_INT_MAX)
+            ->min() ?? PHP_INT_MAX;
+    }
+
+    private function userHierarchyName(User $user): string
+    {
+        return $user->roles
+            ->sortBy(fn (Role $role): int => self::ROLE_LEVELS[$role->code] ?? PHP_INT_MAX)
+            ->first()?->name ?? 'Unassigned';
     }
 
     private function canViewAllUsers(User $user): bool

@@ -414,6 +414,18 @@ class DriverAssignmentApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', JobAssignment::STATUS_IN_PROGRESS);
 
+        $this->assertSame(EmergencyJob::STATUS_IN_PROGRESS, $job->fresh()->status);
+        $controlRoom = User::factory()->create();
+        $controlRoom->roles()->attach(Role::query()->where('code', 'CONTROL_ROOM_ADMIN')->value('id'));
+        $this->actingAs($controlRoom)
+            ->getJson(route('dashboard.statuses', [
+                'incident_ids' => [$job->job_id],
+            ]))
+            ->assertOk()
+            ->assertJsonPath('data.incidents.0.status', EmergencyJob::STATUS_IN_PROGRESS)
+            ->assertHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+
+        $this->actingAs($driver, 'sanctum');
         $completedAt = now()->startOfSecond();
         $this->postJson('/api/v1/driver/assignments/'.$activeAssignmentId.'/work-done', [
             'completionNotes' => 'Work completed at the incident.',
