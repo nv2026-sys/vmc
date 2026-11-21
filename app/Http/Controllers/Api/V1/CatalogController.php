@@ -97,7 +97,10 @@ class CatalogController extends Controller
 
     public function vehicles(CatalogIndexRequest $request): JsonResponse
     {
-        $vehicles = Vehicle::query()->with('fireStation:id,name,code');
+        $vehicles = Vehicle::query()->with([
+            'fireStation:id,name,code',
+            'assignedDriver:id,name',
+        ]);
         $this->applyStationScope($request->user(), $vehicles, 'fire_station_id');
         $this->applySearch($vehicles, $request->validated('search'), [
             'vehicle_number',

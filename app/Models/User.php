@@ -92,6 +92,11 @@ class User extends Authenticatable
         return $this->hasMany(JobAssignment::class, 'assigned_by');
     }
 
+    public function assignedVehicles(): HasMany
+    {
+        return $this->hasMany(Vehicle::class, 'assigned_driver_user_id');
+    }
+
     public function devices(): HasMany
     {
         return $this->hasMany(UserDevice::class);

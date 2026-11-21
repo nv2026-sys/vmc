@@ -110,7 +110,11 @@ class VehicleTrackingWorkflow
             $vehicle = $this->visibleVehicles($actor)->lockForUpdate()->findOrFail($vehicle->id);
             if ($this->isDriverRestricted($actor)) {
                 $linkedVehicle = $this->statusWorkflow->findDriverLinkedVehicle($actor, true);
-                abort_unless($linkedVehicle && (int) $linkedVehicle->id === (int) $vehicle->id, 404);
+                abort_unless(
+                    (int) $vehicle->assigned_driver_user_id === (int) $actor->id
+                        || ($linkedVehicle && (int) $linkedVehicle->id === (int) $vehicle->id),
+                    404,
+                );
                 if ($vehicle->operational_status !== Vehicle::OPERATIONAL_STATUS_ON_ROAD) {
                     throw ValidationException::withMessages([
                         'status' => 'The assigned vehicle must be On Road to submit GPS updates.',
@@ -192,8 +196,10 @@ class VehicleTrackingWorkflow
         }
 
         if ($this->isDriverRestricted($actor)) {
-            $vehicles->whereHas('assignments', function (Builder $assignments) use ($actor): void {
-                $assignments->where('assigned_driver_user_id', $actor->id);
+            $vehicles->where(function (Builder $query) use ($actor): void {
+                $query->where('assigned_driver_user_id', $actor->id)
+                    ->orWhereHas('assignments', fn (Builder $assignments) => $assignments
+                        ->where('assigned_driver_user_id', $actor->id));
             });
         } else {
             $stationIds = $actor->fireStations()->pluck('fire_stations.id')

@@ -45,13 +45,13 @@ Laravel 12 application and REST API foundation for a multi-station fire brigade 
 
 ### Phase 5 implementation
 
-- Accept authenticated GPS points for active vehicle assignments, validate geographic, speed, and time ranges, reject stale points, and update the latest vehicle coordinates transactionally. The mobile app should POST the device's current fix every 15 seconds while tracking is active.
+- Accept authenticated GPS points for active vehicle assignments or a vehicle's admin-managed primary driver, validate geographic, speed, and time ranges, reject stale points, and update the latest vehicle coordinates transactionally. The mobile app should POST the device's current fix every 15 seconds while tracking is active.
 - Restrict driver uploads and route history to vehicles and assignments tied to their active team membership or leadership; operational tracking respects station scope.
 - Vehicle drivers need to be the leader or an active member of the response team attached to the assignment; assignments without a linked team cannot accept driver GPS uploads.
 - Record the authenticated receiver for each GPS point and audit accepted location updates.
 - Show latest vehicle positions and assignment route history in the tracking page and API; route queries default to the last 24 hours and are capped at 500 points per request.
 - Authenticated API endpoints: `GET /api/v1/tracking`, `GET /api/v1/vehicles/{vehicle}/gps`, and `POST /api/v1/vehicles/{vehicle}/gps`.
-- GPS update payload: `assignment_id` (when assigned), `latitude`, `longitude`, and optional `speed_kph` and device-captured `recorded_at` (ISO 8601). Each accepted POST appends a row to `vehicle_gps_logs` and refreshes the vehicle's latest coordinates. GPS permission denial or network errors should be handled by the mobile app and retried on its next 15-second cycle.
+- GPS update payload: `latitude`, `longitude`, and optional `assignment_id`, `speed_kph`, and device-captured `recorded_at` (ISO 8601). Drivers without an active job assignment can send GPS for their admin-linked primary vehicle with no `assignment_id`; the vehicle must still be On Road. Each accepted POST appends a row to `vehicle_gps_logs` and refreshes the vehicle's latest coordinates. GPS permission denial or network errors should be handled by the mobile app and retried on its next 15-second cycle.
 
 ### Phase 6 implementation
 
@@ -180,7 +180,8 @@ The demo seeder runs only in local/testing environments and is repeatable. It cr
 - `GET /api/v1/auth/me` — requires `Authorization: Bearer <token>`; returns the user, role/permission codes, and assigned station IDs.
 - `POST /api/v1/auth/logout` — requires a bearer token and revokes that token.
 - `POST /api/save-fcm-token` — requires a bearer token; accepts `fcm_token` and `device_type` (`android` or `ios`). Tokens are encrypted at rest, refreshed when the same token is registered again, and multiple devices can be stored per user. Apply the `user_devices` migration on deployment.
-- Existing dispatch, assignment, driver-action, vehicle-status, and remark-reply database notifications are also queued for FCM when the user has registered devices. Their FCM `data` includes `event` and `screen` (`incident_detail`, `vehicle_detail`, or `notifications`) plus available IDs. Set `FIREBASE_PROJECT_ID` and `FIREBASE_CREDENTIALS` to the project ID and a server-only service-account JSON file path; never commit the JSON file. The queue worker must be running to send pushes.
+- Existing dispatch, assignment, driver-action, vehicle-status, and remark-reply database notifications are also queued for FCM when the user has registered devices. Assignment pushes are limited to the assigned driver's registered device(s); status updates go to the driver or operations recipients according to who initiated the change. The FCM notification and `data` include title/body, `event`, `screen` (`incident_detail`, `vehicle_detail`, or `notifications`), and available assignment details. Set `FIREBASE_PROJECT_ID` and `FIREBASE_CREDENTIALS` to the project ID and a server-only service-account JSON file path; never commit the JSON file. The queue worker must be running to send pushes.
+- Test delivery from the backend with `php artisan fcm:test 42` (use a real user ID or email). Add `--device=7` to target one device ID belonging to that user. A successful response prints Firebase's message name; expired tokens are removed, and other delivery failures are reported by the command or logged after the queued job retries.
 
 Register a Flutter device with the Sanctum bearer token:
 

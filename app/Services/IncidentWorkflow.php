@@ -1351,6 +1351,11 @@ class IncidentWorkflow
         array $data,
         array $excludedUserIds = [],
     ): void {
+        if ($assignment->assigned_driver_user_id !== null
+            && (int) $assignment->assigned_driver_user_id !== (int) $actor->id) {
+            $data['fcm_target_user_id'] = (int) $assignment->assigned_driver_user_id;
+        }
+
         $stationId = (int) $assignment->fire_station_id;
         $participantIds = collect([
             $assignment->assigned_driver_user_id,

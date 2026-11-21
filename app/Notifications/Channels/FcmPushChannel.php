@@ -16,6 +16,14 @@ class FcmPushChannel
             throw new InvalidArgumentException('FCM notifications can only be sent to users.');
         }
 
+        $notificationData = $notification->toDatabase($notifiable);
+        $targetUserId = $notificationData['fcm_target_user_id']
+            ?? $notificationData['driver_user_id']
+            ?? null;
+        if (is_scalar($targetUserId) && (int) $targetUserId !== (int) $notifiable->id) {
+            return;
+        }
+
         $deviceIds = $notifiable->devices()->pluck('id');
         if ($deviceIds->isEmpty()) {
             return;
@@ -29,7 +37,6 @@ class FcmPushChannel
             return;
         }
 
-        $notificationData = $notification->toDatabase($notifiable);
         $event = (string) ($notificationData['event'] ?? 'notification');
         $screen = isset($notificationData['vehicle_id'])
             ? 'vehicle_detail'
@@ -42,7 +49,27 @@ class FcmPushChannel
             'screen' => $screen,
         ];
 
-        foreach (['job_id', 'incident_id', 'assignment_id', 'vehicle_id'] as $key) {
+        foreach ([
+            'job_id',
+            'incident_id',
+            'assignment_id',
+            'vehicle_id',
+            'incident_type',
+            'priority',
+            'incident_address',
+            'society_name',
+            'fire_station',
+            'station_name',
+            'vehicle_number',
+            'team_name',
+            'status',
+            'previous_status',
+            'new_status',
+            'driver_user_id',
+            'message',
+            'assigned_at',
+            'changed_at',
+        ] as $key) {
             if (isset($notificationData[$key]) && is_scalar($notificationData[$key])) {
                 $data[$key] = (string) $notificationData[$key];
             }

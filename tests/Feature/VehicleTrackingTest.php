@@ -193,6 +193,58 @@ class VehicleTrackingTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('status');
     }
 
+    public function test_primary_driver_can_submit_gps_without_any_job_assignment(): void
+    {
+        $driver = User::factory()->create();
+        $driver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+        $station = FireStation::query()->create([
+            'code' => 'FS-PRIMARY-GPS',
+            'name' => 'Primary GPS Station',
+            'address' => '1 Primary GPS Road',
+        ]);
+        $driver->fireStations()->attach($station->id);
+        $vehicle = Vehicle::query()->create([
+            'fire_station_id' => $station->id,
+            'vehicle_number' => 'PRIMARY-GPS-01',
+            'vehicle_type' => 'FIRE_ENGINE',
+            'status' => Vehicle::STATUS_AVAILABLE,
+            'operational_status' => Vehicle::OPERATIONAL_STATUS_ON_ROAD,
+            'assigned_driver_user_id' => $driver->id,
+        ]);
+
+        $this->actingAs($driver, 'sanctum')
+            ->postJson('/api/v1/vehicles/'.$vehicle->id.'/gps', [
+                'latitude' => 22.3090,
+                'longitude' => 73.1830,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.assignment_id', null)
+            ->assertJsonPath('data.received_by', $driver->id);
+
+        $this->assertDatabaseHas('vehicle_gps_logs', [
+            'vehicle_id' => $vehicle->id,
+            'job_assignment_id' => null,
+            'received_by' => $driver->id,
+        ]);
+
+        $this->getJson('/api/v1/tracking')
+            ->assertOk()
+            ->assertJsonPath('data.0.vehicle_number', 'PRIMARY-GPS-01');
+        $this->getJson('/api/v1/fleet/vehicles')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $vehicle->id)
+            ->assertJsonPath('data.0.assignments', []);
+
+        $otherDriver = User::factory()->create();
+        $otherDriver->roles()->attach(Role::query()->where('code', 'VEHICLE_DRIVER')->value('id'));
+        $this->actingAs($otherDriver, 'sanctum')
+            ->postJson('/api/v1/vehicles/'.$vehicle->id.'/gps', [
+                'latitude' => 22.3100,
+                'longitude' => 73.1840,
+            ])
+            ->assertNotFound();
+    }
+
     public function test_driver_road_status_changes_are_recorded_append_only_with_actor_and_timestamp(): void
     {
         [$dispatcher, $driver, , $vehicle] = $this->activeVehicleAssignment();

@@ -60,7 +60,10 @@ class FleetController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
         $records = Vehicle::query()
-            ->whereHas('assignments', fn (Builder $assignments) => $this->scopeToDriver($assignments, $driver)->whereNull('released_at'))
+            ->where(fn (Builder $vehicles) => $vehicles
+                ->where('assigned_driver_user_id', $driver->id)
+                ->orWhereHas('assignments', fn (Builder $assignments) => $this->scopeToDriver($assignments, $driver)
+                    ->whereNull('released_at')))
             ->with([
                 'fireStation:id,name,code',
                 'latestGpsLog',

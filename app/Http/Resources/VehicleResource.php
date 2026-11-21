@@ -20,6 +20,13 @@ class VehicleResource extends JsonResource
                 'name' => $this->fireStation->name,
                 'code' => $this->fireStation->code,
             ]),
+            'assigned_driver_user_id' => $this->assigned_driver_user_id === null
+                ? null
+                : (int) $this->assigned_driver_user_id,
+            'assigned_driver' => $this->whenLoaded('assignedDriver', fn () => $this->assignedDriver ? [
+                'id' => (int) $this->assignedDriver->id,
+                'name' => $this->assignedDriver->name,
+            ] : null),
             'vehicle_number' => $this->vehicle_number,
             'vehicle_type' => $this->vehicle_type,
             'registration_number' => $this->registration_number,

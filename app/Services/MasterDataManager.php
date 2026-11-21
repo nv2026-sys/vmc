@@ -62,6 +62,26 @@ class MasterDataManager
             ->get(['id', 'name']);
     }
 
+    public function driversFor(User $user, ?int $vehicleId = null): Collection
+    {
+        $stationIds = $this->stationsFor($user)->modelKeys();
+
+        return User::query()
+            ->where('is_active', true)
+            ->whereHas('roles', fn ($roles) => $roles->where('roles.code', 'VEHICLE_DRIVER'))
+            ->where(fn ($query) => $query
+                ->whereHas('fireStations', fn ($stations) => $stations->whereIn('fire_stations.id', $stationIds))
+                ->orWhereHas('managedFireStations', fn ($stations) => $stations->whereIn('id', $stationIds)))
+            ->where(function ($query) use ($vehicleId): void {
+                $query->whereDoesntHave('assignedVehicles');
+                if ($vehicleId !== null) {
+                    $query->orWhereHas('assignedVehicles', fn ($vehicles) => $vehicles->whereKey($vehicleId));
+                }
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
     public function find(string $kind, int|string $id): Model
     {
         $model = $this->modelClass($kind);
@@ -168,6 +188,12 @@ class MasterDataManager
                 'vehicle_type' => ['required', Rule::in(self::VEHICLE_TYPES)],
                 'registration_number' => ['nullable', 'string', 'max:40', Rule::unique('vehicles', 'registration_number')->ignore($record?->getKey())],
                 'gps_device_id' => ['nullable', 'string', 'max:100', Rule::unique('vehicles', 'gps_device_id')->ignore($record?->getKey())],
+                'assigned_driver_user_id' => [
+                    'nullable',
+                    'integer',
+                    Rule::exists('users', 'id')->where('is_active', true),
+                    Rule::unique('vehicles', 'assigned_driver_user_id')->ignore($record?->getKey()),
+                ],
                 'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
                 'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
                 'status' => ['required', Rule::in(self::VEHICLE_STATUSES)],
@@ -205,6 +231,24 @@ class MasterDataManager
             if ($validUserIds->count() !== $userIds->unique()->count()) {
                 throw ValidationException::withMessages([
                     'member_ids' => 'Team leaders and members must be active users assigned to the selected station.',
+                ]);
+            }
+        }
+
+        if ($kind === 'vehicles' && ! empty($data['assigned_driver_user_id'])) {
+            $stationId = (int) $data['fire_station_id'];
+            $isValidDriver = User::query()
+                ->whereKey($data['assigned_driver_user_id'])
+                ->where('is_active', true)
+                ->whereHas('roles', fn ($roles) => $roles->where('roles.code', 'VEHICLE_DRIVER'))
+                ->where(fn ($query) => $query
+                    ->whereHas('fireStations', fn ($stations) => $stations->whereKey($stationId))
+                    ->orWhereHas('managedFireStations', fn ($stations) => $stations->whereKey($stationId)))
+                ->exists();
+
+            if (! $isValidDriver) {
+                throw ValidationException::withMessages([
+                    'assigned_driver_user_id' => 'Select an active driver assigned to the selected fire station.',
                 ]);
             }
         }

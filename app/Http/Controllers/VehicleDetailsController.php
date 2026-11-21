@@ -139,8 +139,10 @@ class VehicleDetailsController extends Controller
         }
 
         if ($actor->hasRole('VEHICLE_DRIVER')) {
-            $vehicles->whereHas('assignments', fn (Builder $assignments) => $assignments
-                ->where('assigned_driver_user_id', $actor->id));
+            $vehicles->where(fn (Builder $query) => $query
+                ->where('assigned_driver_user_id', $actor->id)
+                ->orWhereHas('assignments', fn (Builder $assignments) => $assignments
+                    ->where('assigned_driver_user_id', $actor->id)));
 
             return;
         }

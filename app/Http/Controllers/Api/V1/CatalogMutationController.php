@@ -63,7 +63,10 @@ class CatalogMutationController extends Controller
                 'users as active_staff_count' => fn ($query) => $query->where('users.is_active', true),
             ])),
             'wards' => new WardResource($record->load('fireStations:id,name')),
-            'vehicles' => new VehicleResource($record->load('fireStation:id,name,code')),
+            'vehicles' => new VehicleResource($record->load([
+                'fireStation:id,name,code',
+                'assignedDriver:id,name',
+            ])),
             'teams' => new TeamResource($record
                 ->load(['fireStation:id,name,code', 'leader:id,name', 'members:id,name'])
                 ->loadCount(['members as active_members_count' => fn ($query) => $query->whereNull('team_members.left_at')])),

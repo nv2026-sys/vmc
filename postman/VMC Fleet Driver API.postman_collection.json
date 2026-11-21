@@ -386,7 +386,7 @@
                 }
               ]
             },
-            "description": "Returns only vehicles on the driver's active assignments."
+            "description": "Returns vehicles on the driver's active assignments and the driver's admin-managed primary vehicle."
           },
           "response": []
         },
@@ -911,7 +911,65 @@
                 "gps"
               ]
             },
-            "description": "The mobile app should send this authenticated POST every 15 seconds while location tracking is active. Set device_latitude, device_longitude, optional device_speed_kph, and device_recorded_at from the current device GPS fix (recorded_at should be ISO 8601). Every accepted request appends a vehicle_gps_logs record and updates the vehicle's latest coordinates. The API rejects points older than the latest saved point, requires On Road status, and is rate-limited to 120 requests per minute."
+            "description": "Send this authenticated POST every 15 seconds while location tracking is active. For an active job, set assignment_id to the active assignment belonging to this vehicle and driver. If the driver has no job assignment, omit assignment_id; the vehicle must be linked as that driver's admin-managed Primary driver. In both cases the vehicle must be On Road. Set device_latitude, device_longitude, optional device_speed_kph, and device_recorded_at from the current GPS fix (ISO 8601). Each accepted request appends a vehicle_gps_logs record and updates the vehicle's latest coordinates. Older points are rejected; rate limit is 120 requests per minute."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Vehicle GPS Location (No Job Assignment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('GPS point accepted', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test('GPS point has no job assignment', function () {",
+                  "        pm.expect(pm.response.json().data.assignment_id).to.be.null;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": \"{{device_latitude}}\",\n  \"longitude\": \"{{device_longitude}}\",\n  \"speed_kph\": \"{{device_speed_kph}}\",\n  \"recorded_at\": \"{{device_recorded_at}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vehicles/{{vehicle_id}}/gps",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "{{vehicle_id}}",
+                "gps"
+              ]
+            },
+            "description": "Use this request when the driver has no active job assignment. The signed-in driver must be configured as the vehicle's Primary driver in Vehicles > Edit, and the vehicle must be On Road. vehicle_id is still required in the URL. Set the device GPS variables before sending."
           },
           "response": []
         },

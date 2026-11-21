@@ -203,6 +203,52 @@ class MasterDataManagementTest extends TestCase
             ->assertSee('Save changes');
     }
 
+    public function test_vehicle_primary_driver_can_be_managed_and_must_be_unique(): void
+    {
+        $admin = $this->userWithRole('CONTROL_ROOM_ADMIN');
+        $driver = $this->userWithRole('VEHICLE_DRIVER');
+        $station = FireStation::query()->create([
+            'code' => 'FS-PRIMARY-DRIVER',
+            'name' => 'Primary Driver Station',
+            'address' => '1 Driver Road',
+        ]);
+        $driver->fireStations()->attach($station->id);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/vehicles', [
+                'fire_station_id' => $station->id,
+                'vehicle_number' => 'PRIMARY-DRIVER-01',
+                'vehicle_type' => 'FIRE_ENGINE',
+                'status' => 'AVAILABLE',
+                'assigned_driver_user_id' => $driver->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.assigned_driver_user_id', $driver->id)
+            ->assertJsonPath('data.assigned_driver.id', $driver->id);
+
+        $this->assertDatabaseHas('vehicles', [
+            'vehicle_number' => 'PRIMARY-DRIVER-01',
+            'assigned_driver_user_id' => $driver->id,
+        ]);
+
+        $this->postJson('/api/v1/vehicles', [
+            'fire_station_id' => $station->id,
+            'vehicle_number' => 'PRIMARY-DRIVER-02',
+            'vehicle_type' => 'FIRE_ENGINE',
+            'status' => 'AVAILABLE',
+            'assigned_driver_user_id' => $driver->id,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('assigned_driver_user_id');
+
+        $vehicle = Vehicle::query()->where('vehicle_number', 'PRIMARY-DRIVER-01')->firstOrFail();
+        $this->actingAs($admin)
+            ->get(route('app.vehicles.edit', $vehicle->id))
+            ->assertOk()
+            ->assertSee('Primary driver')
+            ->assertSee($driver->name);
+    }
+
     public function test_write_endpoints_require_authentication_and_delete_protects_linked_records(): void
     {
         $this->postJson('/api/v1/vehicles', [])->assertUnauthorized();

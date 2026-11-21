@@ -22,8 +22,13 @@ class VehicleStatusWorkflow
         abort_unless($actor->hasRole('VEHICLE_DRIVER'), 403);
 
         return DB::transaction(function () use ($actor, $requestedVehicle, $status): ?VehicleStatusHistory {
-            $vehicle = $this->findDriverLinkedVehicle($actor, true);
-            abort_unless($vehicle && (int) $vehicle->id === (int) $requestedVehicle->id, 404);
+            $vehicle = Vehicle::query()->lockForUpdate()->findOrFail($requestedVehicle->id);
+            $assignmentVehicle = $this->findDriverLinkedVehicle($actor, true);
+            abort_unless(
+                (int) $vehicle->assigned_driver_user_id === (int) $actor->id
+                    || ($assignmentVehicle && (int) $assignmentVehicle->id === (int) $vehicle->id),
+                404,
+            );
 
             $history = $this->setStatus($actor, $vehicle, $status, 'api');
             if ($status === Vehicle::OPERATIONAL_STATUS_ON_ROAD) {
@@ -65,6 +70,18 @@ class VehicleStatusWorkflow
             ->orderByDesc('assigned_at')
             ->orderByDesc('id')
             ->first();
+
+        if (! $assignment) {
+            $vehicleQuery = Vehicle::query()->where('assigned_driver_user_id', $driver->id);
+            if ($lock) {
+                $vehicleQuery->lockForUpdate();
+            }
+
+            $vehicle = $vehicleQuery->first();
+            if ($vehicle) {
+                return $vehicle;
+            }
+        }
 
         $assignment ??= JobAssignment::query()
             ->where('assigned_driver_user_id', $driver->id)

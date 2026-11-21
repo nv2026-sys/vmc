@@ -28,6 +28,7 @@ class Vehicle extends Model
         'vehicle_type',
         'registration_number',
         'gps_device_id',
+        'assigned_driver_user_id',
         'latitude',
         'longitude',
         'status',
@@ -47,6 +48,11 @@ class Vehicle extends Model
     public function fireStation(): BelongsTo
     {
         return $this->belongsTo(FireStation::class);
+    }
+
+    public function assignedDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_driver_user_id');
     }
 
     public function assignments(): HasMany

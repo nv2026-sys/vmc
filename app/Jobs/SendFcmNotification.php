@@ -9,6 +9,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class SendFcmNotification implements ShouldQueue
 {
@@ -32,5 +34,16 @@ class SendFcmNotification implements ShouldQueue
         if ($device) {
             $firebase->send($device, $this->message);
         }
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        $device = UserDevice::query()->find($this->deviceId);
+
+        Log::error('Firebase push job failed after retries.', [
+            'device_id' => $this->deviceId,
+            'user_id' => $device?->user_id,
+            'error' => $exception->getMessage(),
+        ]);
     }
 }

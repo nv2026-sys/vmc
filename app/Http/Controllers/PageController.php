@@ -669,6 +669,7 @@ class PageController extends Controller
         $query = Vehicle::query()
             ->with([
                 'fireStation:id,name,code',
+                'assignedDriver:id,name',
                 'latestGpsLog',
                 'assignments' => fn (HasMany $assignments) => $assignments
                     ->whereNull('released_at')

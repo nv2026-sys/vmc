@@ -71,6 +71,9 @@ class MasterDataController extends Controller
             'record' => $record,
             'stations' => $stations,
             'users' => $users,
+            'drivers' => $kind === 'vehicles'
+                ? $manager->driversFor($request->user(), $record ? (int) $record->getKey() : null)
+                : collect(),
             'vehicleTypes' => MasterDataManager::VEHICLE_TYPES,
             'vehicleStatuses' => MasterDataManager::VEHICLE_STATUSES,
             'teamStatuses' => MasterDataManager::TEAM_STATUSES,
